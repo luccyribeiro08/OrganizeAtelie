@@ -33,6 +33,7 @@ interface OrderDetailsModalProps {
   onUpdateStatus: (orderId: string, status: OrderStatus) => void;
   onPrintOrder: (order: Order) => void;
   onNotifyReady?: (order: Order) => void;
+  onNotifyCompleted?: (order: Order) => void;
 }
 
 export const OrderDetailsModal: React.FC<OrderDetailsModalProps> = ({
@@ -41,7 +42,8 @@ export const OrderDetailsModal: React.FC<OrderDetailsModalProps> = ({
   onClose,
   onUpdateStatus,
   onPrintOrder,
-  onNotifyReady
+  onNotifyReady,
+  onNotifyCompleted
 }) => {
   const [copiedWA, setCopiedWA] = useState(false);
   const [selectedImagePreview, setSelectedImagePreview] = useState<string | null>(null);
@@ -369,6 +371,18 @@ export const OrderDetailsModal: React.FC<OrderDetailsModalProps> = ({
               >
                 <Sparkles className="w-4 h-4" />
                 <span>Avisar Pedido Pronto</span>
+              </button>
+            )}
+
+            {order.status === 'Finalizado' && onNotifyCompleted && (
+              <button
+                type="button"
+                onClick={() => onNotifyCompleted(order)}
+                className="flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-gradient-to-r from-pink-500 to-rose-600 hover:from-pink-600 hover:to-rose-700 text-white text-xs font-bold shadow-xs transition-all active:scale-95 cursor-pointer"
+                title="Enviar mensagem de agradecimento, pedido de avaliação e convite para o Instagram"
+              >
+                <Sparkles className="w-4 h-4" />
+                <span>Agradecimento & Instagram</span>
               </button>
             )}
 

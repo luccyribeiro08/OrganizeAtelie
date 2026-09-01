@@ -11,6 +11,7 @@ import { ConfiguracoesView } from './components/ConfiguracoesView';
 import { OrderDetailsModal } from './components/OrderDetailsModal';
 import { OrderReceiptModal } from './components/OrderReceiptModal';
 import { OrderReadyNotificationModal } from './components/OrderReadyNotificationModal';
+import { OrderCompletedNotificationModal } from './components/OrderCompletedNotificationModal';
 import { AuthView } from './components/AuthView';
 import { ActiveTab, AtelieProfile, CatalogItem, Client, Order, OrderStatus, Quotation, UserAccount } from './types';
 import {
@@ -254,6 +255,7 @@ export default function App() {
   const [selectedOrder, setSelectedOrder] = useState<Order | null>(null);
   const [orderToPrint, setOrderToPrint] = useState<Order | null>(null);
   const [orderReadyForNotification, setOrderReadyForNotification] = useState<Order | null>(null);
+  const [orderCompletedForNotification, setOrderCompletedForNotification] = useState<Order | null>(null);
 
   // Persist registered users
   useEffect(() => {
@@ -587,6 +589,11 @@ export default function App() {
       // If status changed to "Pronto p/ Envio", trigger WhatsApp notification modal
       if (status === 'Pronto p/ Envio') {
         setOrderReadyForNotification(updated);
+      }
+
+      // If status changed to "Finalizado", trigger WhatsApp completion thank you & review modal
+      if (isNowFinalized && target.status !== 'Finalizado') {
+        setOrderCompletedForNotification(updated);
       }
 
       return updatedList;
@@ -999,6 +1006,7 @@ export default function App() {
               onDeleteOrder={handleDeleteOrder}
               onNavigateToNewOrder={() => setActiveTab('criar-pedido')}
               onNotifyReady={(ord) => setOrderReadyForNotification(ord)}
+              onNotifyCompleted={(ord) => setOrderCompletedForNotification(ord)}
             />
           )}
 
@@ -1063,6 +1071,7 @@ export default function App() {
             setOrderToPrint(ord);
           }}
           onNotifyReady={(ord) => setOrderReadyForNotification(ord)}
+          onNotifyCompleted={(ord) => setOrderCompletedForNotification(ord)}
         />
       )}
 
@@ -1080,6 +1089,15 @@ export default function App() {
           profile={profile}
           clients={clients}
           onClose={() => setOrderReadyForNotification(null)}
+        />
+      )}
+
+      {orderCompletedForNotification && (
+        <OrderCompletedNotificationModal
+          order={orderCompletedForNotification}
+          profile={profile}
+          clients={clients}
+          onClose={() => setOrderCompletedForNotification(null)}
         />
       )}
     </div>

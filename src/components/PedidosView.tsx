@@ -54,6 +54,7 @@ interface PedidosViewProps {
   onDeleteOrder: (orderId: string) => void;
   onNavigateToNewOrder: () => void;
   onNotifyReady?: (order: Order) => void;
+  onNotifyCompleted?: (order: Order) => void;
 }
 
 export const PedidosView: React.FC<PedidosViewProps> = ({
@@ -64,7 +65,8 @@ export const PedidosView: React.FC<PedidosViewProps> = ({
   onUpdateStatus,
   onDeleteOrder,
   onNavigateToNewOrder,
-  onNotifyReady
+  onNotifyReady,
+  onNotifyCompleted
 }) => {
   const [viewMode, setViewMode] = useState<'list' | 'kanban'>('list');
   const [searchQuery, setSearchQuery] = useState('');
@@ -560,6 +562,18 @@ export const PedidosView: React.FC<PedidosViewProps> = ({
                               </button>
                             )}
 
+                            {/* If Finalizado, show highlighted Agradecimento & Avaliacao button */}
+                            {isFinalized && onNotifyCompleted && (
+                              <button
+                                onClick={() => onNotifyCompleted(order)}
+                                className="px-2.5 py-1 text-[11px] font-bold text-white bg-gradient-to-r from-pink-500 to-rose-600 hover:from-pink-600 hover:to-rose-700 rounded-xl flex items-center gap-1 shadow-xs transition-all active:scale-95 cursor-pointer"
+                                title="Enviar mensagem de agradecimento, avaliação e Instagram no WhatsApp"
+                              >
+                                <Sparkles className="w-3 h-3" />
+                                <span>Agradecimento</span>
+                              </button>
+                            )}
+
                             {/* WhatsApp Direct Send */}
                             <a
                               href={waLink}
@@ -751,6 +765,19 @@ export const PedidosView: React.FC<PedidosViewProps> = ({
                             >
                               <Sparkles className="w-3.5 h-3.5" />
                               <span>Avisar no WhatsApp</span>
+                            </button>
+                          )}
+
+                          {isOrderFinalized && onNotifyCompleted && (
+                            <button
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                onNotifyCompleted(order);
+                              }}
+                              className="w-full mt-2 py-1.5 px-3 rounded-xl bg-gradient-to-r from-pink-500 to-rose-600 hover:from-pink-600 hover:to-rose-700 text-white text-xs font-bold flex items-center justify-center gap-1.5 shadow-xs transition-all active:scale-95 cursor-pointer"
+                            >
+                              <Sparkles className="w-3.5 h-3.5" />
+                              <span>Agradecer no WhatsApp</span>
                             </button>
                           )}
                         </div>

@@ -164,6 +164,29 @@ export function generateOrderReadyWhatsAppMessage(
   );
 }
 
+export function generateOrderCompletedWhatsAppMessage(
+  order: Order,
+  ownerName?: string,
+  atelieName?: string,
+  instagram?: string
+): string {
+  const sender = ownerName || 'Luccy Ribeiro';
+  const atelie = atelieName || 'Organize Ateliê';
+  const instaHandle = instagram
+    ? (instagram.startsWith('@') ? instagram : `@${instagram}`)
+    : '@atelie';
+
+  return (
+    `🎉 *PEDIDO CONCLUÍDO & ENTREGUE!* 🎉\n\n` +
+    `Olá, *${order.clientName}*! Tudo bem? 🌸\n\n` +
+    `Aqui é *${sender}* do *${atelie}*! Passando para agradecer de coração pela confiança em nosso trabalho para a sua encomenda *${order.theme}* (Pedido *${order.code}*)! 🥰💖\n\n` +
+    `Foi uma honra enorme e fizemos cada detalhe com muito amor e carinho!\n\n` +
+    `📸 *Queremos ver o resultado!* Se puder, tire fotos bem lindas e nos marque no Instagram: *${instaHandle}*! Vamos amar ver e repostar no nosso perfil! ✨\n\n` +
+    `⭐ *Avalie nosso Ateliê:* Como foi sua experiência com nossos produtos e atendimento? Sua avaliação é super importante para continuarmos trazendo o melhor para vocês!\n\n` +
+    `Siga nosso perfil *${instaHandle}* para ficar por dentro de todas as novidades. Esperamos você nos próximos aniversários e comemorações! Um grande abraço! ✂️🎀💌`
+  );
+}
+
 export function triggerConfetti() {
   confetti({
     particleCount: 80,

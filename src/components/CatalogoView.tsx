@@ -13,7 +13,8 @@ import {
   X
 } from 'lucide-react';
 import { CatalogItem } from '../types';
-import { formatCurrency, readFileAsDataUrl } from '../utils/helpers';
+import { formatCurrency, readFileAsDataUrl, roundCurrency } from '../utils/helpers';
+import { DecimalInput } from './DecimalInput';
 
 interface CatalogoViewProps {
   catalog: CatalogItem[];
@@ -104,7 +105,7 @@ export const CatalogoView: React.FC<CatalogoViewProps> = ({
         name: name.trim(),
         category,
         description: description.trim() || 'Produto artesanal personalizado do ateliê.',
-        basePrice: basePrice || 0,
+        basePrice: roundCurrency(basePrice || 0),
         estimatedDays: estimatedDays || 3,
         imageUrl: imageUrl.trim() || editingItem.imageUrl,
         tags: [category, 'Personalizados', 'Ateliê'],
@@ -116,7 +117,7 @@ export const CatalogoView: React.FC<CatalogoViewProps> = ({
         name: name.trim(),
         category,
         description: description.trim() || 'Produto artesanal personalizado do ateliê.',
-        basePrice: basePrice || 0,
+        basePrice: roundCurrency(basePrice || 0),
         estimatedDays: estimatedDays || 3,
         imageUrl:
           imageUrl.trim() ||
@@ -356,13 +357,12 @@ export const CatalogoView: React.FC<CatalogoViewProps> = ({
                   <label className="block text-[11px] font-bold text-slate-500 uppercase tracking-wider mb-1.5">
                     PREÇO BASE (R$)
                   </label>
-                  <input
-                    type="number"
-                    step="0.50"
-                    min="0"
+                  <DecimalInput
                     value={basePrice}
-                    onChange={(e) => setBasePrice(parseFloat(e.target.value) || 0)}
-                    className="w-full px-3 py-2.5 bg-[#f8f9fa] border border-[#f0e4e8] rounded-xl text-xs text-slate-800 focus:outline-hidden focus:border-[#ac2471]"
+                    onChangeValue={(val) => setBasePrice(val)}
+                    prefix="R$"
+                    placeholder="0,00"
+                    className="w-full px-3 py-2 bg-[#f8f9fa] border border-[#f0e4e8] rounded-xl text-xs font-bold text-slate-800 focus:outline-hidden focus:border-[#ac2471]"
                   />
                 </div>
               </div>

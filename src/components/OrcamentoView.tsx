@@ -25,7 +25,8 @@ import {
   X
 } from 'lucide-react';
 import { AtelieProfile, MaterialCostItem, Order, Quotation } from '../types';
-import { createWhatsAppLink, formatCurrency, formatDate, triggerConfetti } from '../utils/helpers';
+import { createWhatsAppLink, formatCurrency, formatDate, triggerConfetti, roundCurrency } from '../utils/helpers';
+import { DecimalInput } from './DecimalInput';
 
 interface OrcamentoViewProps {
   quotations: Quotation[];
@@ -71,13 +72,13 @@ export const OrcamentoView: React.FC<OrcamentoViewProps> = ({
   // Success Feedback state
   const [saveSuccessMessage, setSaveSuccessMessage] = useState<string | null>(null);
 
-  // Calculation Math
-  const totalMaterialsCost = materials.reduce((acc, m) => acc + m.unitCost * m.quantityUsed, 0);
-  const materialsAndExtrasCost = totalMaterialsCost + additionalCosts;
-  const profitValue = materialsAndExtrasCost * (profitMargin / 100);
-  const calculatedPrice = materialsAndExtrasCost + profitValue + laborCost;
-  const roundedPrice = Math.ceil(calculatedPrice);
-  const baseCost = materialsAndExtrasCost + laborCost;
+  // Calculation Math with Cent Precision
+  const totalMaterialsCost = roundCurrency(materials.reduce((acc, m) => acc + (m.unitCost || 0) * (m.quantityUsed || 0), 0));
+  const materialsAndExtrasCost = roundCurrency(totalMaterialsCost + (additionalCosts || 0));
+  const profitValue = roundCurrency(materialsAndExtrasCost * (profitMargin / 100));
+  const calculatedPrice = roundCurrency(materialsAndExtrasCost + profitValue + (laborCost || 0));
+  const roundedPrice = calculatedPrice;
+  const baseCost = roundCurrency(materialsAndExtrasCost + (laborCost || 0));
 
   const handleAddMaterial = () => {
     setMaterials((prev) => [
@@ -202,7 +203,7 @@ export const OrcamentoView: React.FC<OrcamentoViewProps> = ({
     const targetNotes = fromQuote ? fromQuote.notes : notes;
     const quoteCode = fromQuote ? fromQuote.code : (editingQuoteCode || '#ORC');
 
-    const depositVal = Math.round(targetPrice * 0.5);
+    const depositVal = roundCurrency(targetPrice * 0.5);
 
     const partialOrder: Partial<Order> = {
       clientName: targetClient,
@@ -212,9 +213,9 @@ export const OrcamentoView: React.FC<OrcamentoViewProps> = ({
       orderType: 'Orçamento Aprovado',
       financial: {
         paymentMethod: 'PIX',
-        total: targetPrice,
+        total: roundCurrency(targetPrice),
         deposit: depositVal,
-        remaining: targetPrice - depositVal,
+        remaining: roundCurrency(targetPrice - depositVal),
         paymentProgress: 50,
       },
       items: [
@@ -222,7 +223,7 @@ export const OrcamentoView: React.FC<OrcamentoViewProps> = ({
           id: `item-quote-${Date.now()}`,
           name: targetTheme,
           quantity: 1,
-          unitPrice: targetPrice,
+          unitPrice: roundCurrency(targetPrice),
           notes: `Convertido do ${quoteCode} (Custo base: ${formatCurrency(targetCost)})`,
         }
       ],
@@ -500,29 +501,22 @@ export const OrcamentoView: React.FC<OrcamentoViewProps> = ({
                         />
                       </div>
                       <div className="sm:col-span-2">
-                        <input
-                          type="number"
-                          step="0.1"
-                          min="0"
+                        <DecimalInput
                           value={mat.quantityUsed}
-                          onChange={(e) =>
-                            handleUpdateMaterial(idx, 'quantityUsed', parseFloat(e.target.value) || 0)
-                          }
-                          className="w-full px-2 py-1 bg-white border border-pink-100 rounded-lg text-xs text-center font-bold text-slate-800 focus:outline-hidden"
-                          title="Quantidade gasta"
+                          onChangeValue={(val) => handleUpdateMaterial(idx, 'quantityUsed', val)}
+                          placeholder="1"
+                          className="w-full px-2 py-1 bg-white border border-pink-100 rounded-lg text-xs text-center font-bold text-slate-800 focus:outline-hidden focus:border-[#ac2471]"
+                          title="Quantidade gasta (aceita decimais)"
                         />
                       </div>
                       <div className="sm:col-span-2">
-                        <input
-                          type="number"
-                          step="0.10"
-                          min="0"
+                        <DecimalInput
                           value={mat.unitCost}
-                          onChange={(e) =>
-                            handleUpdateMaterial(idx, 'unitCost', parseFloat(e.target.value) || 0)
-                          }
-                          className="w-full px-2 py-1 bg-white border border-pink-100 rounded-lg text-xs text-right font-bold text-slate-800 focus:outline-hidden"
-                          title="Custo unitário"
+                          onChangeValue={(val) => handleUpdateMaterial(idx, 'unitCost', val)}
+                          prefix="R$"
+                          placeholder="0,00"
+                          className="w-full px-2 py-1 bg-white border border-pink-100 rounded-lg text-xs text-right font-bold text-slate-800 focus:outline-hidden focus:border-[#ac2471]"
+                          title="Custo unitário (aceita ponto, vírgula e centavos)"
                         />
                       </div>
                       <div className="sm:col-span-2 flex items-center justify-between">
@@ -560,12 +554,11 @@ export const OrcamentoView: React.FC<OrcamentoViewProps> = ({
                   <label className="block text-[11px] font-bold text-slate-500 uppercase mb-1">
                     VALOR DA MÃO DE OBRA FIXO (R$)
                   </label>
-                  <input
-                    type="number"
-                    step="1"
-                    min="0"
+                  <DecimalInput
                     value={laborCost}
-                    onChange={(e) => setLaborCost(parseFloat(e.target.value) || 0)}
+                    onChangeValue={(val) => setLaborCost(val)}
+                    prefix="R$"
+                    placeholder="0,00"
                     className="w-full px-3 py-2 bg-[#f8f9fa] border border-[#f0e4e8] rounded-xl text-xs font-bold text-slate-800 focus:outline-hidden focus:border-[#ac2471]"
                   />
                   <p className="text-[10px] text-slate-400 mt-1">
@@ -577,12 +570,11 @@ export const OrcamentoView: React.FC<OrcamentoViewProps> = ({
                   <label className="block text-[11px] font-bold text-slate-500 uppercase mb-1">
                     CUSTOS EXTRAS / ENERGIA (R$)
                   </label>
-                  <input
-                    type="number"
-                    step="0.5"
-                    min="0"
+                  <DecimalInput
                     value={additionalCosts}
-                    onChange={(e) => setAdditionalCosts(parseFloat(e.target.value) || 0)}
+                    onChangeValue={(val) => setAdditionalCosts(val)}
+                    prefix="R$"
+                    placeholder="0,00"
                     className="w-full px-3 py-2 bg-[#f8f9fa] border border-[#f0e4e8] rounded-xl text-xs font-bold text-slate-800 focus:outline-hidden focus:border-[#ac2471]"
                   />
                   <p className="text-[10px] text-slate-400 mt-1">

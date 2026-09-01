@@ -33,8 +33,11 @@ import {
   formatDate,
   getDaysRemaining,
   readFileAsDataUrl,
-  triggerConfetti
+  triggerConfetti,
+  roundCurrency,
+  parseNumberInput
 } from '../utils/helpers';
+import { DecimalInput } from './DecimalInput';
 import { INSPIRATIONS } from '../data/initialData';
 
 interface NovoPedidoViewProps {
@@ -145,10 +148,10 @@ export const NovoPedidoView: React.FC<NovoPedidoViewProps> = ({
     'Flores & Borboletas'
   ];
 
-  // Calculate items sum
-  const itemsTotal = items.reduce((acc, it) => acc + (it.quantity * it.unitPrice), 0);
-  const totalAmount = customTotal !== null ? customTotal : itemsTotal;
-  const remainingAmount = Math.max(0, totalAmount - (deposit || 0));
+  // Calculate items sum with cent precision
+  const itemsTotal = roundCurrency(items.reduce((acc, it) => acc + (it.quantity * it.unitPrice), 0));
+  const totalAmount = roundCurrency(customTotal !== null ? customTotal : itemsTotal);
+  const remainingAmount = roundCurrency(Math.max(0, totalAmount - (deposit || 0)));
   const paymentProgress = totalAmount > 0 ? Math.min(100, Math.round(((deposit || 0) / totalAmount) * 100)) : 0;
 
   // Add Item
@@ -241,14 +244,18 @@ export const NovoPedidoView: React.FC<NovoPedidoViewProps> = ({
       theme: theme.trim() || 'Personalizado',
       origin,
       orderType: orderType || 'Personalizados Diversos',
-      items: items.length > 0 ? items : [
+      items: (items.length > 0 ? items : [
         {
           id: 'item-generic-1',
           name: theme ? `Personalizados ${theme}` : 'Itens de Papelaria',
           quantity: 1,
-          unitPrice: totalAmount,
+          unitPrice: roundCurrency(totalAmount),
         }
-      ],
+      ]).map(it => ({
+        ...it,
+        unitPrice: roundCurrency(it.unitPrice || 0),
+        quantity: Math.max(1, parseInt(it.quantity as any) || 1)
+      })),
       personalization: {
         honoreeName,
         age,
@@ -258,9 +265,9 @@ export const NovoPedidoView: React.FC<NovoPedidoViewProps> = ({
       },
       financial: {
         paymentMethod,
-        total: totalAmount,
-        deposit: deposit || 0,
-        remaining: remainingAmount,
+        total: roundCurrency(totalAmount),
+        deposit: roundCurrency(deposit || 0),
+        remaining: roundCurrency(remainingAmount),
         paymentProgress,
       },
       status: isDraft
@@ -799,16 +806,17 @@ export const NovoPedidoView: React.FC<NovoPedidoViewProps> = ({
                         />
                       </div>
 
-                      {/* Unit Price (Locked: editable only in catalog) */}
+                      {/* Unit Price (Editable with dot, comma and cents) */}
                       <div className="sm:col-span-2">
-                        <div className="flex items-center gap-1">
-                          <label className="block text-[9px] font-bold text-slate-400 uppercase">Valor Un.</label>
-                          <span title="Valor fixo do catálogo (editável na aba Catálogo)"><Lock className="w-2.5 h-2.5 text-slate-400" /></span>
-                        </div>
-                        <div className="w-full px-2 py-1.5 bg-slate-100/80 border border-slate-200/70 rounded-lg text-xs font-bold text-slate-700 text-right cursor-not-allowed flex items-center justify-between">
-                          <span className="text-[9px] text-slate-400 font-normal">R$</span>
-                          <span>{item.unitPrice.toFixed(2)}</span>
-                        </div>
+                        <label className="block text-[9px] font-bold text-slate-400 uppercase mb-1">Valor Un.</label>
+                        <DecimalInput
+                          value={item.unitPrice}
+                          onChangeValue={(val) => handleUpdateItem(idx, 'unitPrice', val)}
+                          prefix="R$"
+                          placeholder="0,00"
+                          className="w-full px-2 py-1 bg-white border border-pink-100 rounded-lg text-xs font-bold text-slate-800 text-right focus:outline-hidden focus:border-[#ac2471]"
+                          title="Valor unitário do item (aceita centavos, ponto e vírgula)"
+                        />
                       </div>
 
                       {/* Subtotal & Delete */}
@@ -1007,8 +1015,8 @@ export const NovoPedidoView: React.FC<NovoPedidoViewProps> = ({
             </div>
 
             {/* VALOR TOTAL (R$) */}
-            <div className="text-center py-2 bg-[#fdfafb] rounded-2xl border border-pink-100/60 p-4">
-              <label className="block text-[11px] font-bold text-slate-500 uppercase tracking-wider mb-1">
+            <div className="text-center py-2 bg-[#fdfafb] rounded-2xl border border-pink-100/60 p-4 space-y-2">
+              <label className="block text-[11px] font-bold text-slate-500 uppercase tracking-wider">
                 VALOR TOTAL (R$)
               </label>
               <div className="flex items-center justify-center gap-1">
@@ -1016,42 +1024,92 @@ export const NovoPedidoView: React.FC<NovoPedidoViewProps> = ({
                   {formatCurrency(totalAmount)}
                 </span>
               </div>
-              <div className="mt-1">
-                <input
-                  type="number"
-                  step="1"
-                  min="0"
-                  value={customTotal !== null ? customTotal : itemsTotal}
-                  onChange={(e) => setCustomTotal(parseFloat(e.target.value) || 0)}
-                  className="w-28 text-center text-xs bg-white border border-pink-200 rounded-lg py-1 text-slate-600 focus:outline-hidden"
-                  placeholder="Editar total"
-                  title="Clique para ajustar o valor total manualmente"
-                />
+              <div className="flex items-center justify-center gap-2 mt-1">
+                <div className="w-36">
+                  <DecimalInput
+                    value={customTotal !== null ? customTotal : itemsTotal}
+                    onChangeValue={(val) => setCustomTotal(val)}
+                    placeholder="0,00"
+                    prefix="R$"
+                    className="w-full text-center text-xs bg-white border border-pink-200 rounded-lg py-1.5 font-bold text-slate-700 focus:outline-hidden focus:border-[#ac2471]"
+                    title="Digite com ponto ou vírgula e centavos para ajustar o total"
+                  />
+                </div>
+                {customTotal !== null && (
+                  <button
+                    type="button"
+                    onClick={() => setCustomTotal(null)}
+                    className="px-2.5 py-1.5 text-[10px] font-bold bg-pink-100/80 text-[#ac2471] hover:bg-pink-200 rounded-lg transition-colors cursor-pointer"
+                    title="Restaurar soma automática dos itens"
+                  >
+                    Auto
+                  </button>
+                )}
               </div>
+              {customTotal !== null && (
+                <p className="text-[10px] text-pink-500 font-medium">
+                  Valor ajustado manualmente (Soma dos itens: {formatCurrency(itemsTotal)})
+                </p>
+              )}
             </div>
 
             {/* SINAL (R$) & RESTANTE */}
-            <div className="grid grid-cols-2 gap-3">
-              <div className="p-3 bg-[#f8f9fa] rounded-2xl border border-[#f0e4e8]">
-                <label className="block text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-1">
-                  SINAL (R$)
-                </label>
-                <input
-                  type="number"
-                  step="1"
-                  min="0"
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              <div className="p-3 bg-[#f8f9fa] rounded-2xl border border-[#f0e4e8] space-y-1.5">
+                <div className="flex items-center justify-between">
+                  <label className="block text-[10px] font-bold text-slate-500 uppercase tracking-wider">
+                    SINAL (R$)
+                  </label>
+                  <span className="text-[10px] text-slate-400 font-medium">
+                    {paymentProgress}%
+                  </span>
+                </div>
+                <DecimalInput
                   value={deposit}
-                  onChange={(e) => setDeposit(parseFloat(e.target.value) || 0)}
+                  onChangeValue={(val) => setDeposit(val)}
+                  placeholder="0,00"
+                  prefix="R$"
                   className="w-full bg-white border border-pink-100 rounded-lg px-2 py-1.5 text-sm font-bold text-slate-800 text-center focus:outline-hidden focus:border-[#ac2471]"
+                  title="Valor do sinal pago (aceita ponto, vírgula e centavos)"
                 />
+                {/* Quick shortcuts for Sinal */}
+                <div className="flex items-center justify-between gap-1 pt-1">
+                  <button
+                    type="button"
+                    onClick={() => setDeposit(roundCurrency(totalAmount * 0.5))}
+                    className="flex-1 py-0.5 text-[10px] font-bold rounded bg-pink-100/70 text-[#ac2471] hover:bg-pink-200/80 transition-colors cursor-pointer"
+                    title="Definir 50% de sinal com centavos"
+                  >
+                    50%
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setDeposit(totalAmount)}
+                    className="flex-1 py-0.5 text-[10px] font-bold rounded bg-emerald-100/70 text-emerald-700 hover:bg-emerald-200/80 transition-colors cursor-pointer"
+                    title="100% Pago / Quitado"
+                  >
+                    100%
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setDeposit(0)}
+                    className="px-2 py-0.5 text-[10px] font-semibold rounded bg-slate-200/70 text-slate-600 hover:bg-slate-300 transition-colors cursor-pointer"
+                    title="Limpar sinal"
+                  >
+                    Zerar
+                  </button>
+                </div>
               </div>
 
               <div className="p-3 bg-[#f8f9fa] rounded-2xl border border-[#f0e4e8] text-center flex flex-col justify-center">
                 <span className="block text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-1">
                   RESTANTE
                 </span>
-                <span className="text-sm font-bold text-slate-800">
+                <span className="text-base font-bold text-slate-800">
                   {formatCurrency(remainingAmount)}
+                </span>
+                <span className="text-[10px] text-slate-400 mt-0.5">
+                  {remainingAmount === 0 && totalAmount > 0 ? '✨ Quitado' : 'a receber na entrega'}
                 </span>
               </div>
             </div>

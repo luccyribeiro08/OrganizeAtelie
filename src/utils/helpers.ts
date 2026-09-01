@@ -1,8 +1,36 @@
 import confetti from 'canvas-confetti';
 import { Order } from '../types';
 
+export function parseNumberInput(value: string | number | null | undefined): number {
+  if (value === null || value === undefined) return 0;
+  if (typeof value === 'number') return isNaN(value) ? 0 : value;
+  
+  let str = value.trim().replace(/^R\$\s*/i, '').trim();
+  if (!str) return 0;
+
+  if (str.includes('.') && str.includes(',')) {
+    const lastDot = str.lastIndexOf('.');
+    const lastComma = str.lastIndexOf(',');
+    if (lastComma > lastDot) {
+      str = str.replace(/\./g, '').replace(',', '.');
+    } else {
+      str = str.replace(/,/g, '');
+    }
+  } else if (str.includes(',')) {
+    str = str.replace(',', '.');
+  }
+
+  str = str.replace(/[^\d.-]/g, '');
+  const parsed = parseFloat(str);
+  return isNaN(parsed) ? 0 : parsed;
+}
+
+export function roundCurrency(value: number): number {
+  return Math.round((value + Number.EPSILON) * 100) / 100;
+}
+
 export function formatCurrency(value: number | string): string {
-  const num = typeof value === 'string' ? parseFloat(value.replace(/[^\d.-]/g, '')) || 0 : value;
+  const num = typeof value === 'string' ? parseNumberInput(value) : (typeof value === 'number' && !isNaN(value) ? value : 0);
   return new Intl.NumberFormat('pt-BR', {
     style: 'currency',
     currency: 'BRL',

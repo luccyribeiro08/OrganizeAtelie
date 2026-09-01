@@ -35,9 +35,27 @@ const DEFAULT_INITIAL_USER: UserAccount = {
 };
 
 export default function App() {
-  // Navigation
-  const [activeTab, setActiveTab] = useState<ActiveTab>('pedidos');
+  // Navigation with reload persistence
+  const [activeTab, setActiveTab] = useState<ActiveTab>(() => {
+    try {
+      const savedTab = localStorage.getItem('atelie_active_tab_v2');
+      if (
+        savedTab &&
+        ['pedidos', 'criar-pedido', 'catalogo', 'orcamento', 'agenda', 'configuracoes'].includes(savedTab)
+      ) {
+        return savedTab as ActiveTab;
+      }
+    } catch {}
+    return 'pedidos';
+  });
   const [isOpenMobile, setIsOpenMobile] = useState(false);
+
+  // Persist activeTab on change
+  useEffect(() => {
+    try {
+      localStorage.setItem('atelie_active_tab_v2', activeTab);
+    } catch {}
+  }, [activeTab]);
 
   // Registered Users State
   const [registeredUsers, setRegisteredUsers] = useState<UserAccount[]>(() => {
@@ -53,7 +71,7 @@ export default function App() {
     }
   });
 
-  // Single Saved Account on Device (Always the last user that logged in)
+  // Single Saved Account on Device
   const [lastSavedUser, setLastSavedUser] = useState<UserAccount | null>(() => {
     try {
       const saved = localStorage.getItem('atelie_saved_device_user_v2');
@@ -64,9 +82,17 @@ export default function App() {
     return null;
   });
 
-  // Current Logged In User State
+  // Current Logged In User State - Robust Session Persistence on Page Reload (F5)
   const [currentUser, setCurrentUser] = useState<UserAccount | null>(() => {
     try {
+      // 1. Direct logged-in user object
+      const directUserStr = localStorage.getItem('atelie_current_user_v3');
+      if (directUserStr) {
+        const parsed = JSON.parse(directUserStr);
+        if (parsed && parsed.id) return parsed;
+      }
+
+      // 2. Saved active session ID
       const activeSessionId = localStorage.getItem('atelie_active_session_id_v2');
       const savedUsersStr = localStorage.getItem('atelie_users_db_v2');
       const usersList: UserAccount[] = savedUsersStr
@@ -77,11 +103,52 @@ export default function App() {
         const found = usersList.find((u) => u.id === activeSessionId);
         if (found) return found;
       }
+
+      // 3. Fallback to saved device user account
+      const lastDeviceStr = localStorage.getItem('atelie_saved_device_user_v2');
+      if (lastDeviceStr) {
+        const parsed = JSON.parse(lastDeviceStr);
+        if (parsed && parsed.id) return parsed;
+      }
+
       return null;
     } catch {
       return null;
     }
   });
+
+  // Check and restore active Supabase Auth session on mount
+  useEffect(() => {
+    const checkSupabaseAuth = async () => {
+      try {
+        const { data } = await supabase.auth.getSession();
+        if (data?.session?.user) {
+          const u = data.session.user;
+          const userMeta = u.user_metadata || {};
+          const supaUser: UserAccount = {
+            id: u.id,
+            name: userMeta.name || 'Artesã',
+            atelieName: userMeta.atelie_name || 'Meu Ateliê',
+            email: u.email || '',
+            password: '',
+            phone: userMeta.phone || '',
+            avatarUrl: userMeta.avatar_url || '',
+            logoUrl: userMeta.logo_url || '',
+            role: userMeta.role || 'Artesã Responsável',
+            createdAt: u.created_at || new Date().toISOString(),
+          };
+          setCurrentUser(supaUser);
+          try {
+            localStorage.setItem('atelie_current_user_v3', JSON.stringify(supaUser));
+            localStorage.setItem('atelie_active_session_id_v2', supaUser.id);
+          } catch {}
+        }
+      } catch (err) {
+        console.log('Supabase session restore check', err);
+      }
+    };
+    checkSupabaseAuth();
+  }, []);
 
   // Helper to load user profile
   const loadUserProfile = (user: UserAccount): AtelieProfile => {
@@ -180,7 +247,13 @@ export default function App() {
   // When currentUser changes, reload their profile, orders, and catalog
   useEffect(() => {
     if (currentUser) {
-      localStorage.setItem('atelie_active_session_id_v2', currentUser.id);
+      try {
+        localStorage.setItem('atelie_current_user_v3', JSON.stringify(currentUser));
+        localStorage.setItem('atelie_active_session_id_v2', currentUser.id);
+        localStorage.setItem('atelie_saved_device_user_v2', JSON.stringify(currentUser));
+      } catch (e) {
+        console.error(e);
+      }
       
       // Initial load from local
       setProfile(loadUserProfile(currentUser));
@@ -203,8 +276,6 @@ export default function App() {
           if (remoteQuotes && remoteQuotes.length > 0) setQuotations(remoteQuotes);
         });
       }
-    } else {
-      localStorage.removeItem('atelie_active_session_id_v2');
     }
   }, [currentUser?.id]);
 
@@ -270,9 +341,11 @@ export default function App() {
     localStorage.setItem(`atelie_profile_${newUser.id}`, JSON.stringify(initialProfile));
 
     setRegisteredUsers((prev) => [...prev, newUser]);
-    // Save only 1 account on the device (the newly registered and logged-in account)
     setLastSavedUser(newUser);
+    setCurrentUser(newUser);
     try {
+      localStorage.setItem('atelie_current_user_v3', JSON.stringify(newUser));
+      localStorage.setItem('atelie_active_session_id_v2', newUser.id);
       localStorage.setItem('atelie_saved_device_user_v2', JSON.stringify(newUser));
     } catch (e) {
       console.error(e);
@@ -284,6 +357,8 @@ export default function App() {
     setCurrentUser(user);
     setLastSavedUser(user);
     try {
+      localStorage.setItem('atelie_current_user_v3', JSON.stringify(user));
+      localStorage.setItem('atelie_active_session_id_v2', user.id);
       localStorage.setItem('atelie_saved_device_user_v2', JSON.stringify(user));
     } catch (e) {
       console.error(e);
@@ -301,12 +376,18 @@ export default function App() {
     }
   };
 
-  // Handle Logout
+  // Handle Logout (Explicit user action to sign out)
   const handleLogout = async () => {
     try {
       await supabase.auth.signOut();
     } catch (e) {
       console.log('Supabase signOut', e);
+    }
+    try {
+      localStorage.removeItem('atelie_current_user_v3');
+      localStorage.removeItem('atelie_active_session_id_v2');
+    } catch (e) {
+      console.error(e);
     }
     setCurrentUser(null);
     setSelectedOrder(null);

@@ -62,9 +62,29 @@ export function readFileAsDataUrl(file: File): Promise<string> {
 
 export function generateWhatsAppOrderMessage(
   order: Order,
-  atelieName: string = 'Organize Ateliê - Luccy Ribeiro',
-  pixKey: string = 'luccy.papelaria@pix.com.br'
+  ownerName?: string,
+  atelieName?: string,
+  pixKey?: string
 ): string {
+  const sender = ownerName || 'Luccy Ribeiro';
+  const atelie = atelieName || 'Organize Ateliê';
+  const key = pixKey || '';
+
+  const depositPercent =
+    order.financial.paymentProgress ||
+    (order.financial.total > 0
+      ? Math.round((order.financial.deposit / order.financial.total) * 100)
+      : 0);
+
+  const depositText = `• *Sinal Pago (Entrada${depositPercent > 0 ? ` ${depositPercent}%` : ''}):* ${formatCurrency(order.financial.deposit)}`;
+
+  let remainingText = '';
+  if (order.status === 'Finalizado' || order.financial.remaining <= 0) {
+    remainingText = `• *Saldo Restante:* 100% Quitado / Pago ✓`;
+  } else {
+    remainingText = `• *Valor Restante (a pagar na entrega do produto ou retirada):* ${formatCurrency(order.financial.remaining)}`;
+  }
+
   const itemsText = order.items
     .map(
       (item, idx) =>
@@ -76,7 +96,7 @@ export function generateWhatsAppOrderMessage(
 
   return (
     `🌸 *Olá, ${order.clientName}!* 🌸\n\n` +
-    `Aqui é Luccy Ribeiro do *Organize Ateliê*! Seu pedido *${order.code}* foi registrado com muito carinho em nosso sistema! ✨\n\n` +
+    `Aqui é *${sender}* do *${atelie}*! Seu pedido *${order.code}* foi registrado com muito carinho em nosso sistema! ✨\n\n` +
     `📋 *Resumo da Encomenda:*\n` +
     `• *Tema:* ${order.theme}\n` +
     `• *Data de Entrega:* ${formatDate(order.deliveryDate)}\n` +
@@ -84,12 +104,12 @@ export function generateWhatsAppOrderMessage(
     `📦 *Itens:*\n${itemsText}\n\n` +
     `💰 *Financeiro:*\n` +
     `• *Valor Total:* ${formatCurrency(order.financial.total)}\n` +
-    `• *Sinal Pago:* ${formatCurrency(order.financial.deposit)}\n` +
-    `• *Restante a Pagar:* ${formatCurrency(order.financial.remaining)}\n` +
-    (order.financial.remaining > 0
-      ? `\n🔑 *Chave PIX para pagamento:* \`${pixKey}\`\n`
+    `${depositText}\n` +
+    `${remainingText}\n` +
+    (order.financial.remaining > 0 && key
+      ? `\n🔑 *Chave PIX para pagamento do saldo:* \`${key}\`\n`
       : '') +
-    `\nEstamos preparando tudo nos mínimos detalhes! Se tiver qualquer dúvida, é só nos chamar aqui! 💖✂️`
+    `\nEstamos preparando tudo nos mínimos detalhes com muito carinho! Se tiver qualquer dúvida, é só nos chamar por aqui! 💖✂️`
   );
 }
 
@@ -100,4 +120,95 @@ export function triggerConfetti() {
     origin: { y: 0.6 },
     colors: ['#ff69b4', '#ac2471', '#ffd1dc', '#f472b6', '#fb7185', '#fbcfe8'],
   });
+}
+
+export const MONTH_NAMES_PT = [
+  'Janeiro',
+  'Fevereiro',
+  'Março',
+  'Abril',
+  'Maio',
+  'Junho',
+  'Julho',
+  'Agosto',
+  'Setembro',
+  'Outubro',
+  'Novembro',
+  'Dezembro',
+];
+
+export function getCurrentMonthKey(): string {
+  const now = new Date();
+  const year = now.getFullYear();
+  const month = String(now.getMonth() + 1).padStart(2, '0');
+  return `${year}-${month}`;
+}
+
+export function getOrderMonthKey(order: Order): string {
+  // If order is completed, prioritize completedAt or deliveryDate
+  const dateStr = order.completedAt || order.deliveryDate || order.orderDate || order.createdAt;
+  if (!dateStr) return getCurrentMonthKey();
+  
+  if (dateStr.includes('-')) {
+    const parts = dateStr.split('T')[0].split('-');
+    if (parts.length >= 2) {
+      return `${parts[0]}-${parts[1].padStart(2, '0')}`;
+    }
+  }
+  return getCurrentMonthKey();
+}
+
+export function formatMonthYear(monthKey: string): string {
+  if (!monthKey || monthKey === 'todos') return 'Todos os Meses';
+  const parts = monthKey.split('-');
+  if (parts.length === 2) {
+    const year = parts[0];
+    const monthIndex = parseInt(parts[1], 10) - 1;
+    if (monthIndex >= 0 && monthIndex < 12) {
+      return `${MONTH_NAMES_PT[monthIndex]} de ${year}`;
+    }
+  }
+  return monthKey;
+}
+
+export function getAvailableMonths(orders: Order[]): { key: string; label: string; isCurrent: boolean }[] {
+  const currentKey = getCurrentMonthKey();
+  const keysSet = new Set<string>();
+  keysSet.add(currentKey);
+
+  orders.forEach((o) => {
+    const key = getOrderMonthKey(o);
+    if (key) keysSet.add(key);
+  });
+
+  const sortedKeys = Array.from(keysSet).sort((a, b) => b.localeCompare(a));
+
+  return sortedKeys.map((key) => ({
+    key,
+    label: formatMonthYear(key) + (key === currentKey ? ' (Mês Atual)' : ''),
+    isCurrent: key === currentKey,
+  }));
+}
+
+export function calculateMonthlyMetrics(orders: Order[], monthKey?: string) {
+  const targetKey = monthKey || getCurrentMonthKey();
+  
+  const finalizedOrders = orders.filter((o) => {
+    if (o.status !== 'Finalizado') return false;
+    if (targetKey === 'todos') return true;
+    return getOrderMonthKey(o) === targetKey;
+  });
+
+  const totalRevenue = finalizedOrders.reduce((sum, o) => sum + (o.financial?.total || 0), 0);
+  const finalizedCount = finalizedOrders.length;
+  const averageTicket = finalizedCount > 0 ? totalRevenue / finalizedCount : 0;
+
+  return {
+    monthKey: targetKey,
+    monthLabel: formatMonthYear(targetKey),
+    finalizedCount,
+    totalRevenue,
+    averageTicket,
+    orders: finalizedOrders,
+  };
 }

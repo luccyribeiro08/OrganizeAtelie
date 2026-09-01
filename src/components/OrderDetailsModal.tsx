@@ -7,6 +7,7 @@ import {
   CreditCard,
   Eye,
   Gift,
+  Lock,
   MapPin,
   MessageCircle,
   Phone,
@@ -46,7 +47,12 @@ export const OrderDetailsModal: React.FC<OrderDetailsModalProps> = ({
   if (!order) return null;
 
   const daysInfo = getDaysRemaining(order.deliveryDate);
-  const waMessage = generateWhatsAppOrderMessage(order, profile.name, profile.pixKey);
+  const waMessage = generateWhatsAppOrderMessage(
+    order,
+    profile.ownerName,
+    profile.name,
+    profile.pixKey
+  );
   const waLink = createWhatsAppLink(order.clientPhone, waMessage);
 
   const handleCopyMessage = () => {
@@ -97,27 +103,45 @@ export const OrderDetailsModal: React.FC<OrderDetailsModalProps> = ({
 
         {/* Status Workflow Bar */}
         <div className="bg-[#fdf9fa] p-4 rounded-2xl border border-pink-100/80 space-y-2">
-          <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-wider">
-            STATUS DO PEDIDO
-          </label>
-          <div className="flex flex-wrap gap-2">
-            {allStatuses.map((st) => {
-              const isCurrent = order.status === st;
-              return (
-                <button
-                  key={st}
-                  onClick={() => onUpdateStatus(order.id, st)}
-                  className={`px-3 py-1.5 rounded-xl text-xs font-semibold transition-all cursor-pointer ${
-                    isCurrent
-                      ? 'bg-[#ac2471] text-white shadow-xs scale-105'
-                      : 'bg-white text-slate-600 hover:bg-pink-100/70 border border-pink-100'
-                  }`}
-                >
-                  {st}
-                </button>
-              );
-            })}
+          <div className="flex items-center justify-between">
+            <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-wider">
+              STATUS DO PEDIDO
+            </label>
+            {order.status === 'Finalizado' && (
+              <span className="flex items-center gap-1 text-[11px] font-bold text-[#ac2471] bg-pink-100/80 px-2.5 py-0.5 rounded-full">
+                <Lock className="w-3 h-3" />
+                Status Concluído e Bloqueado
+              </span>
+            )}
           </div>
+
+          {order.status === 'Finalizado' ? (
+            <div className="flex items-center gap-2.5 p-3 bg-pink-50 border border-pink-200/80 rounded-xl text-xs text-[#ac2471] font-semibold animate-in fade-in">
+              <Lock className="w-4 h-4 text-[#ac2471] flex-shrink-0" />
+              <span>
+                Este pedido foi <strong>Finalizado</strong> com sucesso! O status foi arquivado na coluna de finalizados e está bloqueado para novas alterações.
+              </span>
+            </div>
+          ) : (
+            <div className="flex flex-wrap gap-2">
+              {allStatuses.map((st) => {
+                const isCurrent = order.status === st;
+                return (
+                  <button
+                    key={st}
+                    onClick={() => onUpdateStatus(order.id, st)}
+                    className={`px-3 py-1.5 rounded-xl text-xs font-semibold transition-all cursor-pointer ${
+                      isCurrent
+                        ? 'bg-[#ac2471] text-white shadow-xs scale-105'
+                        : 'bg-white text-slate-600 hover:bg-pink-100/70 border border-pink-100'
+                    }`}
+                  >
+                    {st}
+                  </button>
+                );
+              })}
+            </div>
+          )}
         </div>
 
         {/* Client & Dates Grid */}
@@ -276,31 +300,50 @@ export const OrderDetailsModal: React.FC<OrderDetailsModalProps> = ({
         )}
 
         {/* Financial Summary */}
-        <div className="p-4 rounded-2xl bg-[#fdf9fa] border border-pink-100 flex flex-col sm:flex-row items-center justify-between gap-4">
-          <div className="space-y-0.5 text-center sm:text-left">
-            <span className="text-xs text-slate-500">
-              Forma: <strong>{order.financial.paymentMethod}</strong>
-            </span>
-            <div className="flex items-center gap-3 text-xs">
-              <span>
-                Sinal Pago: <strong>{formatCurrency(order.financial.deposit)}</strong>
-              </span>
-              <span>•</span>
-              <span className="text-amber-700">
-                Restante: <strong>{formatCurrency(order.financial.remaining)}</strong>
-              </span>
-            </div>
-          </div>
+        {(() => {
+          const isFinalized = order.status === 'Finalizado';
+          const depositPercentage =
+            order.financial.paymentProgress ||
+            (order.financial.total > 0
+              ? Math.round((order.financial.deposit / order.financial.total) * 100)
+              : 0);
 
-          <div className="text-center sm:text-right">
-            <span className="text-[10px] uppercase font-bold text-slate-400 block">
-              Valor Total
-            </span>
-            <span className="text-2xl font-heading font-extrabold text-[#ac2471]">
-              {formatCurrency(order.financial.total)}
-            </span>
-          </div>
-        </div>
+          return (
+            <div className="p-4 rounded-2xl bg-[#fdf9fa] border border-pink-100 flex flex-col sm:flex-row items-center justify-between gap-4">
+              <div className="space-y-0.5 text-center sm:text-left">
+                <span className="text-xs text-slate-500">
+                  Forma: <strong>{order.financial.paymentMethod}</strong>
+                </span>
+                <div className="flex flex-wrap items-center justify-center sm:justify-start gap-2 sm:gap-3 text-xs">
+                  <span>
+                    Sinal Pago ({depositPercentage}%):{' '}
+                    <strong>{formatCurrency(order.financial.deposit)}</strong>
+                  </span>
+                  <span>•</span>
+                  {isFinalized ? (
+                    <span className="text-emerald-700 font-bold flex items-center gap-1">
+                      <Check className="w-3.5 h-3.5" />
+                      Total Quitado (100% Pago)
+                    </span>
+                  ) : (
+                    <span className="text-amber-700">
+                      Restante: <strong>{formatCurrency(order.financial.remaining)}</strong>
+                    </span>
+                  )}
+                </div>
+              </div>
+
+              <div className="text-center sm:text-right">
+                <span className="text-[10px] uppercase font-bold text-slate-400 block">
+                  {isFinalized ? 'Valor Total Quitado' : 'Valor Total'}
+                </span>
+                <span className="text-2xl font-heading font-extrabold text-[#ac2471]">
+                  {formatCurrency(order.financial.total)}
+                </span>
+              </div>
+            </div>
+          );
+        })()}
 
         {/* Bottom Actions */}
         <div className="flex flex-wrap items-center justify-between gap-3 pt-4 border-t border-pink-100">

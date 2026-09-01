@@ -75,6 +75,7 @@ export interface Order {
   mockupImages: string[]; // Direct links to HTML image URLs
   createdAt: string;
   updatedAt: string;
+  completedAt?: string; // Data e hora em que o pedido foi marcado como Finalizado
 }
 
 export interface CatalogItem {
@@ -103,15 +104,20 @@ export interface Quotation {
   clientPhone?: string;
   theme: string;
   materials: MaterialCostItem[];
-  laborHours: number;
-  hourlyRate: number;
+  laborCost: number; // Mão de obra fixa (R$)
+  laborHours?: number;
+  hourlyRate?: number;
   additionalCosts: number;
   profitMargin: number; // %
   calculatedPrice: number;
   suggestedPrice: number;
+  roundedPrice?: number;
   date: string;
   validDays: number;
   notes?: string;
+  status: 'Pendente' | 'Aprovado' | 'Recusado';
+  createdAt?: string;
+  updatedAt?: string;
 }
 
 export interface AtelieProfile {

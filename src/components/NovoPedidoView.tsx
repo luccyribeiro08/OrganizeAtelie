@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   Calendar,
   Check,
@@ -36,12 +36,16 @@ import { INSPIRATIONS } from '../data/initialData';
 
 interface NovoPedidoViewProps {
   catalog: CatalogItem[];
+  initialData?: Partial<Order> | null;
+  onClearInitialData?: () => void;
   onSaveOrder: (order: Order, isDraft?: boolean) => void;
   onNavigateToCatalog?: () => void;
 }
 
 export const NovoPedidoView: React.FC<NovoPedidoViewProps> = ({
   catalog,
+  initialData,
+  onClearInitialData,
   onSaveOrder,
   onNavigateToCatalog
 }) => {
@@ -76,6 +80,41 @@ export const NovoPedidoView: React.FC<NovoPedidoViewProps> = ({
   const [paymentMethod, setPaymentMethod] = useState<PaymentMethod>('PIX');
   const [customTotal, setCustomTotal] = useState<number | null>(null);
   const [deposit, setDeposit] = useState<number>(0);
+
+  // Populate from initialData (e.g. from Quote conversion)
+  useEffect(() => {
+    if (initialData) {
+      if (initialData.clientName) setClientName(initialData.clientName);
+      if (initialData.clientPhone) setClientPhone(initialData.clientPhone);
+      if (initialData.clientInstagram) setClientInstagram(initialData.clientInstagram);
+      if (initialData.theme) setTheme(initialData.theme);
+      if (initialData.origin) setOrigin(initialData.origin);
+      if (initialData.orderType) setOrderType(initialData.orderType);
+      if (initialData.items && initialData.items.length > 0) setItems(initialData.items);
+      if (initialData.deliveryMethod) setDeliveryMethod(initialData.deliveryMethod);
+      if (initialData.deliveryAddress) setDeliveryAddress(initialData.deliveryAddress);
+      if (initialData.financial) {
+        if (initialData.financial.paymentMethod) setPaymentMethod(initialData.financial.paymentMethod);
+        if (initialData.financial.total !== undefined) setCustomTotal(initialData.financial.total);
+        if (initialData.financial.deposit !== undefined) setDeposit(initialData.financial.deposit);
+      }
+      if (initialData.personalization?.specialNotes) {
+        setSpecialNotes(initialData.personalization.specialNotes);
+      }
+      if (initialData.personalization?.honoreeName) {
+        setHonoreeName(initialData.personalization.honoreeName);
+      }
+      if (initialData.personalization?.age) {
+        setAge(initialData.personalization.age);
+      }
+      if (initialData.personalization?.colorPalette) {
+        setColorPalette(initialData.personalization.colorPalette);
+      }
+      if (initialData.personalization?.tagPhrase) {
+        setTagPhrase(initialData.personalization.tagPhrase);
+      }
+    }
+  }, [initialData]);
 
   // Gallery Reference Images / Mockups for the order
   const [mockupImages, setMockupImages] = useState<string[]>([]);
@@ -259,6 +298,33 @@ export const NovoPedidoView: React.FC<NovoPedidoViewProps> = ({
           </button>
         </div>
       </div>
+
+      {/* Quote conversion info banner */}
+      {initialData && (
+        <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 p-4 bg-gradient-to-r from-pink-50 via-[#fdf2f6] to-pink-50 border border-pink-200 rounded-3xl text-xs text-[#ac2471] font-semibold shadow-xs animate-in fade-in">
+          <div className="flex items-center gap-2.5">
+            <div className="w-8 h-8 rounded-xl bg-pink-100 flex items-center justify-center text-[#ac2471] flex-shrink-0">
+              <Sparkles className="w-4 h-4" />
+            </div>
+            <div>
+              <p className="font-bold text-slate-800">
+                Informações carregadas a partir do Orçamento!
+              </p>
+              <p className="text-[11px] text-pink-700/80 font-normal">
+                Cliente, tema, itens e valores foram preenchidos automaticamente. Revise a data de entrega, adicione fotos se desejar e finalize o cadastro.
+              </p>
+            </div>
+          </div>
+          {onClearInitialData && (
+            <button
+              onClick={onClearInitialData}
+              className="text-[11px] font-bold text-slate-500 hover:text-slate-800 underline px-2 py-1 cursor-pointer"
+            >
+              Limpar preenchimento
+            </button>
+          )}
+        </div>
+      )}
 
       {/* Main Grid: Left Form (8 cols on desktop) + Right Cards (4 cols on desktop) */}
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 items-start">

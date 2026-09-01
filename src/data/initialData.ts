@@ -241,6 +241,33 @@ export const INITIAL_ORDERS: Order[] = [
   }
 ];
 
+export const INITIAL_QUOTATIONS: Quotation[] = [
+  {
+    id: 'orc-1',
+    code: '#ORC-101',
+    clientName: 'Fernanda Oliveira',
+    clientPhone: '(11) 98123-9988',
+    theme: 'Kit Topo de Bolo Shaker Sereia Luxo',
+    materials: [
+      { id: 'm1', name: 'Papel Lamicote Dourado e Furta-cor', unitCost: 3.50, quantityUsed: 2, subtotal: 7.00 },
+      { id: 'm2', name: 'Papel Color Plus 180g (Rosa e Turquesa)', unitCost: 0.90, quantityUsed: 4, subtotal: 3.60 },
+      { id: 'm3', name: 'Hastes de Acrílico e Miçangas Shaker', unitCost: 2.50, quantityUsed: 2, subtotal: 5.00 },
+      { id: 'm4', name: 'Fita Espuma e Acetato Transparente', unitCost: 2.00, quantityUsed: 1, subtotal: 2.00 }
+    ],
+    laborCost: 25.00,
+    additionalCosts: 4.00,
+    profitMargin: 40,
+    calculatedPrice: 59.24,
+    suggestedPrice: 60.00,
+    roundedPrice: 60.00,
+    date: '2026-08-30',
+    validDays: 7,
+    notes: 'Proposta para aniversário infantil tema Sereia com efeito Shaker.',
+    status: 'Pendente',
+    createdAt: '2026-08-30T15:00:00Z',
+  }
+];
+
 export const INSPIRATIONS = [
   {
     quote: '"A organização é a chave para transformar criatividade em arte..."',
@@ -261,3 +288,5 @@ export const INSPIRATIONS = [
     imageUrl: 'https://images.unsplash.com/photo-1544716278-ca5e3f4abd8c?auto=format&fit=crop&w=600&q=80',
   }
 ];
+
+

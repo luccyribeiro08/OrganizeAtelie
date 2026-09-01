@@ -10,13 +10,14 @@ import { ConfiguracoesView } from './components/ConfiguracoesView';
 import { OrderDetailsModal } from './components/OrderDetailsModal';
 import { OrderReceiptModal } from './components/OrderReceiptModal';
 import { AuthView } from './components/AuthView';
-import { AtelieProfile, CatalogItem, Order, OrderStatus, UserAccount } from './types';
+import { AtelieProfile, CatalogItem, Order, OrderStatus, Quotation, UserAccount } from './types';
 import {
   INITIAL_ATELIE_PROFILE,
   INITIAL_CATALOG,
-  INITIAL_ORDERS
+  INITIAL_ORDERS,
+  INITIAL_QUOTATIONS
 } from './data/initialData';
-import { getDaysRemaining } from './utils/helpers';
+import { getDaysRemaining, triggerConfetti } from './utils/helpers';
 import { supabase } from './lib/supabaseClient';
 import { supabaseService } from './services/supabaseService';
 
@@ -131,6 +132,18 @@ export default function App() {
     return [];
   };
 
+  // Helper to load user quotations
+  const loadUserQuotations = (user: UserAccount): Quotation[] => {
+    try {
+      const saved = localStorage.getItem(`atelie_quotations_${user.id}`);
+      if (saved) return JSON.parse(saved);
+    } catch (e) {
+      console.error(e);
+    }
+    if (user.id === 'user-luccy-default') return INITIAL_QUOTATIONS;
+    return [];
+  };
+
   // User-isolated persistent states
   const [profile, setProfile] = useState<AtelieProfile>(() =>
     currentUser ? loadUserProfile(currentUser) : INITIAL_ATELIE_PROFILE
@@ -143,6 +156,13 @@ export default function App() {
   const [catalog, setCatalog] = useState<CatalogItem[]>(() =>
     currentUser ? loadUserCatalog(currentUser) : []
   );
+
+  const [quotations, setQuotations] = useState<Quotation[]>(() =>
+    currentUser ? loadUserQuotations(currentUser) : []
+  );
+
+  // Draft data when approving a quote to create order
+  const [orderDraftToCreate, setOrderDraftToCreate] = useState<Partial<Order> | null>(null);
 
   // Modals
   const [selectedOrder, setSelectedOrder] = useState<Order | null>(null);
@@ -166,6 +186,7 @@ export default function App() {
       setProfile(loadUserProfile(currentUser));
       setOrders(loadUserOrders(currentUser));
       setCatalog(loadUserCatalog(currentUser));
+      setQuotations(loadUserQuotations(currentUser));
 
       // Asynchronously fetch and sync with Supabase for real accounts
       if (currentUser.id !== 'user-luccy-default') {
@@ -203,6 +224,16 @@ export default function App() {
       console.error('Error saving user catalog', e);
     }
   }, [catalog, currentUser?.id]);
+
+  // Save Quotations for current user
+  useEffect(() => {
+    if (!currentUser) return;
+    try {
+      localStorage.setItem(`atelie_quotations_${currentUser.id}`, JSON.stringify(quotations));
+    } catch (e) {
+      console.error('Error saving user quotations', e);
+    }
+  }, [quotations, currentUser?.id]);
 
   // Save Profile for current user & sync with user account
   useEffect(() => {
@@ -314,6 +345,7 @@ export default function App() {
   // Handler: Save New Order
   const handleSaveOrder = (newOrder: Order) => {
     setOrders((prev) => [newOrder, ...prev]);
+    setOrderDraftToCreate(null);
     if (currentUser && currentUser.id !== 'user-luccy-default') {
       supabaseService.saveOrder(currentUser.id, newOrder);
     }
@@ -326,28 +358,55 @@ export default function App() {
     setOrders((prev) =>
       prev.map((o) => {
         if (o.id === orderId) {
+          // If order is already Finalizado, lock it from further status changes
+          if (o.status === 'Finalizado' && status !== 'Finalizado') {
+            return o;
+          }
+
+          const isNowFinalized = status === 'Finalizado';
           const updated: Order = {
             ...o,
             status,
+            completedAt: isNowFinalized ? (o.completedAt || new Date().toISOString()) : o.completedAt,
             financial:
-              status === 'Finalizado'
+              isNowFinalized
                 ? {
                     ...o.financial,
-                    deposit: o.financial.total,
                     remaining: 0,
-                    paymentProgress: 100,
                   }
                 : o.financial,
             updatedAt: new Date().toISOString(),
           };
           updatedOrderObj = updated;
+
+          if (isNowFinalized && o.status !== 'Finalizado') {
+            triggerConfetti();
+          }
+
           return updated;
         }
         return o;
       })
     );
     if (selectedOrder && selectedOrder.id === orderId) {
-      setSelectedOrder((prev) => (prev ? { ...prev, status } : null));
+      if (selectedOrder.status !== 'Finalizado' || status === 'Finalizado') {
+        setSelectedOrder((prev) =>
+          prev
+            ? {
+                ...prev,
+                status,
+                completedAt: status === 'Finalizado' ? (prev.completedAt || new Date().toISOString()) : prev.completedAt,
+                financial:
+                  status === 'Finalizado'
+                    ? {
+                        ...prev.financial,
+                        remaining: 0,
+                      }
+                    : prev.financial,
+              }
+            : null
+        );
+      }
     }
     if (currentUser && currentUser.id !== 'user-luccy-default' && updatedOrderObj) {
       supabaseService.saveOrder(currentUser.id, updatedOrderObj);
@@ -394,38 +453,26 @@ export default function App() {
     setActiveTab('criar-pedido');
   };
 
-  // Handler: Convert Quote to Order
-  const handleConvertQuoteToOrder = (partialOrder: Partial<Order>) => {
-    const newOrder: Order = {
-      id: `ped-${Date.now()}`,
-      code: `#PED-${Math.floor(1000 + Math.random() * 9000)}`,
-      clientName: partialOrder.clientName || 'Cliente Orçamento',
-      clientPhone: partialOrder.clientPhone || '(11) 90000-0000',
-      orderDate: new Date().toISOString().split('T')[0],
-      deliveryDate: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString().split('T')[0],
-      deliveryMethod: 'Retirada no Ateliê',
-      theme: partialOrder.theme || 'Personalizado',
-      origin: 'WhatsApp',
-      orderType: 'Orçamento Aprovado',
-      items: partialOrder.items || [],
-      personalization: {},
-      financial: partialOrder.financial || {
-        paymentMethod: 'PIX',
-        total: 100,
-        deposit: 50,
-        remaining: 50,
-        paymentProgress: 50,
-      },
-      status: 'Pendente',
-      mockupImages: [
-        'https://images.unsplash.com/photo-1513519245088-0e12902e5a38?auto=format&fit=crop&w=600&q=80'
-      ],
-      createdAt: new Date().toISOString(),
-      updatedAt: new Date().toISOString(),
-    };
+  // Handler: Save Quotation (Pendente/Aprovado/Recusado)
+  const handleSaveQuotation = (quote: Quotation) => {
+    setQuotations((prev) => {
+      const exists = prev.some((q) => q.id === quote.id);
+      if (exists) {
+        return prev.map((q) => (q.id === quote.id ? quote : q));
+      }
+      return [quote, ...prev];
+    });
+  };
 
-    setOrders((prev) => [newOrder, ...prev]);
-    setActiveTab('pedidos');
+  // Handler: Delete Quotation
+  const handleDeleteQuotation = (quoteId: string) => {
+    setQuotations((prev) => prev.filter((q) => q.id !== quoteId));
+  };
+
+  // Handler: Approve and Create Order from Quote
+  const handleApproveAndCreateOrder = (partialOrder: Partial<Order>, quoteId?: string) => {
+    setOrderDraftToCreate(partialOrder);
+    setActiveTab('criar-pedido');
   };
 
   // Backup handlers
@@ -529,6 +576,8 @@ export default function App() {
           {activeTab === 'criar-pedido' && (
             <NovoPedidoView
               catalog={catalog}
+              initialData={orderDraftToCreate}
+              onClearInitialData={() => setOrderDraftToCreate(null)}
               onSaveOrder={handleSaveOrder}
               onNavigateToCatalog={() => setActiveTab('catalogo')}
             />
@@ -537,6 +586,7 @@ export default function App() {
           {activeTab === 'pedidos' && (
             <PedidosView
               orders={orders}
+              profile={profile}
               onSelectOrder={(ord) => setSelectedOrder(ord)}
               onPrintOrder={(ord) => setOrderToPrint(ord)}
               onUpdateStatus={handleUpdateStatus}
@@ -557,7 +607,10 @@ export default function App() {
 
           {activeTab === 'orcamento' && (
             <OrcamentoView
-              onConvertToOrder={handleConvertQuoteToOrder}
+              quotations={quotations}
+              onSaveQuotation={handleSaveQuotation}
+              onDeleteQuotation={handleDeleteQuotation}
+              onApproveAndCreateOrder={handleApproveAndCreateOrder}
               profile={profile}
             />
           )}

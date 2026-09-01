@@ -1,5 +1,5 @@
 import React from 'react';
-import { Printer, Sparkles, X } from 'lucide-react';
+import { CheckCircle2, Printer, Sparkles, X } from 'lucide-react';
 import { AtelieProfile, Order } from '../types';
 import { formatCurrency, formatDate } from '../utils/helpers';
 import { BrandLogo } from './BrandLogo';
@@ -135,25 +135,59 @@ export const OrderReceiptModal: React.FC<OrderReceiptModalProps> = ({
           </div>
 
           {/* Financial Summary Box */}
-          <div className="flex justify-between items-center p-3 bg-pink-50 rounded-xl text-xs">
-            <div className="space-y-0.5">
-              <p><strong>Forma de Pagamento:</strong> {order.financial.paymentMethod}</p>
-              <p><strong>Sinal Pago:</strong> {formatCurrency(order.financial.deposit)}</p>
-              <p className="text-amber-800 font-bold"><strong>Saldo Restante:</strong> {formatCurrency(order.financial.remaining)}</p>
-              {profile.pixKey && (
-                <p className="text-[10px] text-slate-500 font-mono pt-1">
-                  Chave PIX: {profile.pixKey}
-                </p>
-              )}
-            </div>
+          {(() => {
+            const isFinalized = order.status === 'Finalizado';
+            const depositPercentage =
+              order.financial.paymentProgress ||
+              (order.financial.total > 0
+                ? Math.round((order.financial.deposit / order.financial.total) * 100)
+                : 0);
 
-            <div className="text-right">
-              <span className="text-[10px] font-bold uppercase text-slate-500 block">Total do Pedido</span>
-              <span className="text-xl font-heading font-extrabold text-[#ac2471]">
-                {formatCurrency(order.financial.total)}
-              </span>
-            </div>
-          </div>
+            return (
+              <div className="flex justify-between items-center p-3.5 bg-pink-50/80 border border-pink-100 rounded-xl text-xs">
+                <div className="space-y-1">
+                  <p>
+                    <strong>Forma de Pagamento:</strong> {order.financial.paymentMethod}
+                  </p>
+                  <p>
+                    <strong>Sinal Pago ({depositPercentage}%):</strong>{' '}
+                    {formatCurrency(order.financial.deposit)}
+                  </p>
+                  
+                  {isFinalized ? (
+                    <p className="text-emerald-700 font-bold flex items-center gap-1">
+                      <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600 inline" />
+                      <span>Valor Total: {formatCurrency(order.financial.total)} (Quitado)</span>
+                    </p>
+                  ) : (
+                    <p className="text-amber-800 font-bold">
+                      <strong>Saldo Restante:</strong> {formatCurrency(order.financial.remaining)}
+                    </p>
+                  )}
+
+                  {profile.pixKey && !isFinalized && order.financial.remaining > 0 && (
+                    <p className="text-[10px] text-slate-500 font-mono pt-0.5">
+                      Chave PIX para saldo: {profile.pixKey}
+                    </p>
+                  )}
+                </div>
+
+                <div className="text-right">
+                  <span className="text-[10px] font-bold uppercase text-slate-500 block">
+                    {isFinalized ? 'Valor Total Pago' : 'Total do Pedido'}
+                  </span>
+                  <span className="text-xl font-heading font-extrabold text-[#ac2471]">
+                    {formatCurrency(order.financial.total)}
+                  </span>
+                  {isFinalized && (
+                    <span className="text-[10px] font-bold text-emerald-700 bg-emerald-100/90 px-2 py-0.5 rounded-full inline-block mt-1">
+                      100% PAGO
+                    </span>
+                  )}
+                </div>
+              </div>
+            );
+          })()}
 
           {/* Footer Terms */}
           <div className="pt-3 border-t border-slate-200 text-center text-[10px] text-slate-500 space-y-1">

@@ -1,6 +1,6 @@
 -- ============================================================
--- ORGANIZE ATELIÊ - SUPABASE DATABASE SCHEMA (ATUALIZADO)
--- Tabelas: profiles, orders, catalog, quotations, calendar_events
+-- ORGANIZE ATELIÊ - SUPABASE DATABASE SCHEMA (COMPLETO E ATUALIZADO)
+-- Tabelas: profiles, orders, catalog, quotations, calendar_events, clients
 -- ============================================================
 
 -- 1. Habilitar extensões úteis
@@ -53,7 +53,7 @@ CREATE TABLE IF NOT EXISTS public.orders (
   updated_at TIMESTAMPTZ DEFAULT NOW()
 );
 
--- Se a tabela 'orders' já existia, garantir que a coluna 'completed_at' exista
+-- Garantir colunas adicionais em orders caso a tabela já existisse
 DO $$ 
 BEGIN 
   IF NOT EXISTS (
@@ -61,6 +61,13 @@ BEGIN
     WHERE table_schema = 'public' AND table_name = 'orders' AND column_name = 'completed_at'
   ) THEN
     ALTER TABLE public.orders ADD COLUMN completed_at TIMESTAMPTZ;
+  END IF;
+
+  IF NOT EXISTS (
+    SELECT 1 FROM information_schema.columns 
+    WHERE table_schema = 'public' AND table_name = 'orders' AND column_name = 'mockup_images'
+  ) THEN
+    ALTER TABLE public.orders ADD COLUMN mockup_images JSONB NOT NULL DEFAULT '[]'::jsonb;
   END IF;
 END $$;
 
@@ -81,7 +88,7 @@ CREATE TABLE IF NOT EXISTS public.catalog (
 );
 
 -- ============================================================
--- 5. Tabela de Orçamentos Salvos & Precificação (NOVA)
+-- 5. Tabela de Orçamentos Salvos & Precificação
 -- ============================================================
 CREATE TABLE IF NOT EXISTS public.quotations (
   id TEXT PRIMARY KEY,
@@ -92,6 +99,8 @@ CREATE TABLE IF NOT EXISTS public.quotations (
   theme TEXT NOT NULL,
   materials JSONB NOT NULL DEFAULT '[]'::jsonb,
   labor_cost NUMERIC(10, 2) NOT NULL DEFAULT 25.00,
+  labor_hours NUMERIC(10, 2) DEFAULT 0.00,
+  hourly_rate NUMERIC(10, 2) DEFAULT 0.00,
   additional_costs NUMERIC(10, 2) NOT NULL DEFAULT 0.00,
   profit_margin NUMERIC(5, 2) NOT NULL DEFAULT 40.00,
   calculated_price NUMERIC(10, 2) NOT NULL DEFAULT 0.00,
@@ -105,8 +114,33 @@ CREATE TABLE IF NOT EXISTS public.quotations (
   updated_at TIMESTAMPTZ DEFAULT NOW()
 );
 
+-- Garantir colunas adicionais em quotations
+DO $$ 
+BEGIN 
+  IF NOT EXISTS (
+    SELECT 1 FROM information_schema.columns 
+    WHERE table_schema = 'public' AND table_name = 'quotations' AND column_name = 'labor_hours'
+  ) THEN
+    ALTER TABLE public.quotations ADD COLUMN labor_hours NUMERIC(10, 2) DEFAULT 0.00;
+  END IF;
+
+  IF NOT EXISTS (
+    SELECT 1 FROM information_schema.columns 
+    WHERE table_schema = 'public' AND table_name = 'quotations' AND column_name = 'hourly_rate'
+  ) THEN
+    ALTER TABLE public.quotations ADD COLUMN hourly_rate NUMERIC(10, 2) DEFAULT 0.00;
+  END IF;
+
+  IF NOT EXISTS (
+    SELECT 1 FROM information_schema.columns 
+    WHERE table_schema = 'public' AND table_name = 'quotations' AND column_name = 'rounded_price'
+  ) THEN
+    ALTER TABLE public.quotations ADD COLUMN rounded_price NUMERIC(10, 2) NOT NULL DEFAULT 0.00;
+  END IF;
+END $$;
+
 -- ============================================================
--- 6. Tabela de Agenda & Prazos de Ateliê (NOVA)
+-- 6. Tabela de Agenda & Prazos de Ateliê
 -- ============================================================
 CREATE TABLE IF NOT EXISTS public.calendar_events (
   id TEXT PRIMARY KEY,
@@ -124,7 +158,7 @@ CREATE TABLE IF NOT EXISTS public.calendar_events (
 );
 
 -- ============================================================
--- 7. Tabela de Clientes Cadastrados (NOVA)
+-- 7. Tabela de Clientes Cadastrados
 -- ============================================================
 CREATE TABLE IF NOT EXISTS public.clients (
   id TEXT PRIMARY KEY,

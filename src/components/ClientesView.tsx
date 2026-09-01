@@ -1,7 +1,5 @@
 import React, { useState } from 'react';
 import {
-  Baby,
-  Cake,
   Calendar,
   Check,
   Edit2,
@@ -53,16 +51,11 @@ export const ClientesView: React.FC<ClientesViewProps> = ({
   // Form Fields
   const [name, setName] = useState('');
   const [phone, setPhone] = useState('');
-  const [instagram, setInstagram] = useState('');
   const [email, setEmail] = useState('');
-  const [cpf, setCpf] = useState('');
   const [address, setAddress] = useState('');
   const [city, setCity] = useState('');
   const [state, setState] = useState('');
   const [zipCode, setZipCode] = useState('');
-  const [birthDate, setBirthDate] = useState('');
-  const [childName, setChildName] = useState('');
-  const [childBirthDate, setChildBirthDate] = useState('');
   const [notes, setNotes] = useState('');
 
   // Helper: Get orders for a specific client (by matching phone or name)
@@ -89,10 +82,9 @@ export const ClientesView: React.FC<ClientesViewProps> = ({
     return (
       c.name.toLowerCase().includes(query) ||
       c.phone.includes(query) ||
-      (c.instagram && c.instagram.toLowerCase().includes(query)) ||
       (c.email && c.email.toLowerCase().includes(query)) ||
-      (c.childName && c.childName.toLowerCase().includes(query)) ||
-      (c.cpf && c.cpf.includes(query))
+      (c.city && c.city.toLowerCase().includes(query)) ||
+      (c.address && c.address.toLowerCase().includes(query))
     );
   });
 
@@ -100,35 +92,20 @@ export const ClientesView: React.FC<ClientesViewProps> = ({
   const totalClientsCount = clients.length;
   const repeatClientsCount = clients.filter((c) => getClientOrders(c).length >= 2).length;
   
-  // Birthdays of current month (Client or Child)
-  const currentMonth = new Date().getMonth() + 1;
-  const birthdayClients = clients.filter((c) => {
-    if (c.birthDate) {
-      const parts = c.birthDate.split('-');
-      if (parseInt(parts[1], 10) === currentMonth) return true;
-    }
-    if (c.childBirthDate) {
-      const parts = c.childBirthDate.split('-');
-      if (parseInt(parts[1], 10) === currentMonth) return true;
-    }
-    return false;
-  });
+  // New clients this month
+  const currentMonthPrefix = new Date().toISOString().slice(0, 7);
+  const newClientsThisMonth = clients.filter((c) => c.createdAt && c.createdAt.startsWith(currentMonthPrefix)).length;
 
   // Modal Handlers
   const handleOpenCreateModal = () => {
     setEditingClient(null);
     setName('');
     setPhone('');
-    setInstagram('');
     setEmail('');
-    setCpf('');
     setAddress('');
     setCity('');
     setState('');
     setZipCode('');
-    setBirthDate('');
-    setChildName('');
-    setChildBirthDate('');
     setNotes('');
     setShowModal(true);
   };
@@ -137,16 +114,11 @@ export const ClientesView: React.FC<ClientesViewProps> = ({
     setEditingClient(client);
     setName(client.name);
     setPhone(client.phone);
-    setInstagram(client.instagram || '');
     setEmail(client.email || '');
-    setCpf(client.cpf || '');
     setAddress(client.address || '');
     setCity(client.city || '');
     setState(client.state || '');
     setZipCode(client.zipCode || '');
-    setBirthDate(client.birthDate || '');
-    setChildName(client.childName || '');
-    setChildBirthDate(client.childBirthDate || '');
     setNotes(client.notes || '');
     setShowModal(true);
   };
@@ -162,17 +134,18 @@ export const ClientesView: React.FC<ClientesViewProps> = ({
       id: editingClient ? editingClient.id : `cli-${Date.now()}`,
       name: name.trim(),
       phone: phone.trim(),
-      instagram: instagram.trim() ? (instagram.startsWith('@') ? instagram.trim() : `@${instagram.trim()}`) : undefined,
       email: email.trim() || undefined,
-      cpf: cpf.trim() || undefined,
       address: address.trim() || undefined,
       city: city.trim() || undefined,
       state: state.trim() || undefined,
       zipCode: zipCode.trim() || undefined,
-      birthDate: birthDate || undefined,
-      childName: childName.trim() || undefined,
-      childBirthDate: childBirthDate || undefined,
       notes: notes.trim() || undefined,
+      // Retém valores legados caso já existam em edição
+      instagram: editingClient?.instagram,
+      cpf: editingClient?.cpf,
+      birthDate: editingClient?.birthDate,
+      childName: editingClient?.childName,
+      childBirthDate: editingClient?.childBirthDate,
       createdAt: editingClient ? editingClient.createdAt : new Date().toISOString(),
       updatedAt: new Date().toISOString(),
     };
@@ -253,15 +226,15 @@ export const ClientesView: React.FC<ClientesViewProps> = ({
           </div>
         </div>
 
-        {/* Card 3: Aniversariantes do Mês */}
+        {/* Card 3: Novos Clientes no Mês */}
         <div className="p-5 rounded-3xl bg-white border border-pink-100 shadow-xs flex items-center gap-4">
           <div className="w-12 h-12 rounded-2xl bg-amber-50 text-amber-600 flex items-center justify-center flex-shrink-0">
-            <Cake className="w-6 h-6" />
+            <Sparkles className="w-6 h-6" />
           </div>
           <div>
-            <span className="text-xs font-semibold text-slate-500 block">Aniversariantes do Mês</span>
+            <span className="text-xs font-semibold text-slate-500 block">Novos este Mês</span>
             <span className="text-2xl font-heading font-extrabold text-slate-900">
-              {birthdayClients.length}
+              {newClientsThisMonth}
             </span>
           </div>
         </div>
@@ -288,7 +261,7 @@ export const ClientesView: React.FC<ClientesViewProps> = ({
             type="text"
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
-            placeholder="Buscar por nome, WhatsApp, Instagram, filho(a) ou CPF..."
+            placeholder="Buscar por nome, WhatsApp, e-mail, endereço ou cidade..."
             className="w-full pl-10 pr-4 py-2.5 bg-pink-50/40 hover:bg-pink-50/70 focus:bg-white rounded-2xl text-xs font-medium text-slate-800 placeholder-slate-400 border border-pink-100 focus:outline-hidden focus:ring-2 focus:ring-[#ac2471]/20 transition-all"
           />
         </div>
@@ -347,11 +320,9 @@ export const ClientesView: React.FC<ClientesViewProps> = ({
                         <h3 className="font-heading font-bold text-slate-900 text-sm leading-snug">
                           {client.name}
                         </h3>
-                        {client.instagram && (
-                          <span className="text-xs text-[#ac2471] font-semibold flex items-center gap-1">
-                            {client.instagram}
-                          </span>
-                        )}
+                        <span className="text-xs text-slate-400 font-medium">
+                          Cliente cadastrada
+                        </span>
                       </div>
                     </div>
 
@@ -397,24 +368,6 @@ export const ClientesView: React.FC<ClientesViewProps> = ({
                       </div>
                     )}
                   </div>
-
-                  {/* Child & Birthday Info */}
-                  {(client.childName || client.birthDate) && (
-                    <div className="flex flex-wrap gap-2 text-[11px]">
-                      {client.childName && (
-                        <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-xl bg-amber-50 text-amber-800 font-semibold border border-amber-100">
-                          <Baby className="w-3.5 h-3.5 text-amber-600" />
-                          <span>Filho(a): <strong>{client.childName}</strong> {client.childBirthDate ? `(${formatDate(client.childBirthDate)})` : ''}</span>
-                        </span>
-                      )}
-                      {client.birthDate && (
-                        <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-xl bg-pink-50 text-[#ac2471] font-semibold border border-pink-100">
-                          <Cake className="w-3.5 h-3.5" />
-                          <span>Aniversário: <strong>{formatDate(client.birthDate)}</strong></span>
-                        </span>
-                      )}
-                    </div>
-                  )}
 
                   {/* Notes / Special Preferences */}
                   {client.notes && (
@@ -487,13 +440,13 @@ export const ClientesView: React.FC<ClientesViewProps> = ({
                     {editingClient ? 'Editar Cliente' : 'Cadastrar Nova Cliente'}
                   </h3>
                   <p className="text-xs text-slate-500">
-                    Preencha as informações para agilizar seus próximos pedidos.
+                    Preencha as informações essenciais para agilizar seus próximos pedidos.
                   </p>
                 </div>
               </div>
               <button
                 onClick={() => setShowModal(false)}
-                className="p-2 rounded-full hover:bg-pink-50 text-slate-400 hover:text-slate-600 transition-colors"
+                className="p-2 rounded-full hover:bg-pink-50 text-slate-400 hover:text-slate-600 transition-colors cursor-pointer"
               >
                 <X className="w-5 h-5" />
               </button>
@@ -531,87 +484,21 @@ export const ClientesView: React.FC<ClientesViewProps> = ({
                 </div>
               </div>
 
-              {/* Row 2: Instagram & E-mail */}
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                <div className="space-y-1">
-                  <label className="text-xs font-bold text-slate-700">Instagram (@usuario)</label>
-                  <input
-                    type="text"
-                    value={instagram}
-                    onChange={(e) => setInstagram(e.target.value)}
-                    placeholder="Ex: @mariaclarasilva"
-                    className="w-full px-3.5 py-2.5 rounded-xl bg-pink-50/40 border border-pink-100 text-xs font-medium text-slate-800 focus:bg-white focus:outline-hidden focus:ring-2 focus:ring-[#ac2471]/20"
-                  />
-                </div>
-
-                <div className="space-y-1">
-                  <label className="text-xs font-bold text-slate-700">E-mail</label>
-                  <input
-                    type="email"
-                    value={email}
-                    onChange={(e) => setEmail(e.target.value)}
-                    placeholder="Ex: maria.clara@gmail.com"
-                    className="w-full px-3.5 py-2.5 rounded-xl bg-pink-50/40 border border-pink-100 text-xs font-medium text-slate-800 focus:bg-white focus:outline-hidden focus:ring-2 focus:ring-[#ac2471]/20"
-                  />
-                </div>
-              </div>
-
-              {/* Row 3: CPF & Data de Nascimento */}
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                <div className="space-y-1">
-                  <label className="text-xs font-bold text-slate-700">CPF / Documento (Opcional)</label>
-                  <input
-                    type="text"
-                    value={cpf}
-                    onChange={(e) => setCpf(e.target.value)}
-                    placeholder="Ex: 000.000.000-00"
-                    className="w-full px-3.5 py-2.5 rounded-xl bg-pink-50/40 border border-pink-100 text-xs font-medium text-slate-800 focus:bg-white focus:outline-hidden focus:ring-2 focus:ring-[#ac2471]/20"
-                  />
-                </div>
-
-                <div className="space-y-1">
-                  <label className="text-xs font-bold text-slate-700">Data de Aniversário da Cliente</label>
-                  <input
-                    type="date"
-                    value={birthDate}
-                    onChange={(e) => setBirthDate(e.target.value)}
-                    className="w-full px-3.5 py-2.5 rounded-xl bg-pink-50/40 border border-pink-100 text-xs font-medium text-slate-800 focus:bg-white focus:outline-hidden focus:ring-2 focus:ring-[#ac2471]/20"
-                  />
-                </div>
-              </div>
-
-              {/* Row 4: Dados do Filho(a) / Aniversariante Principal */}
-              <div className="p-4 rounded-2xl bg-amber-50/60 border border-amber-100 space-y-3">
-                <div className="flex items-center gap-2 text-xs font-bold text-amber-900">
-                  <Baby className="w-4 h-4 text-amber-600" />
-                  <span>Dados do Filho(a) / Aniversariante (Papelaria Infantil)</span>
-                </div>
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                  <div>
-                    <label className="text-[11px] font-semibold text-slate-700 block mb-1">Nome do Filho(a)</label>
-                    <input
-                      type="text"
-                      value={childName}
-                      onChange={(e) => setChildName(e.target.value)}
-                      placeholder="Ex: Helena"
-                      className="w-full px-3 py-2 rounded-xl bg-white border border-amber-200 text-xs font-medium text-slate-800 focus:outline-hidden focus:ring-2 focus:ring-amber-400"
-                    />
-                  </div>
-                  <div>
-                    <label className="text-[11px] font-semibold text-slate-700 block mb-1">Data de Aniversário</label>
-                    <input
-                      type="date"
-                      value={childBirthDate}
-                      onChange={(e) => setChildBirthDate(e.target.value)}
-                      className="w-full px-3 py-2 rounded-xl bg-white border border-amber-200 text-xs font-medium text-slate-800 focus:outline-hidden focus:ring-2 focus:ring-amber-400"
-                    />
-                  </div>
-                </div>
-              </div>
-
-              {/* Row 5: Endereço */}
+              {/* Row 2: E-mail */}
               <div className="space-y-1">
-                <label className="text-xs font-bold text-slate-700">Endereço Completo de Entrega</label>
+                <label className="text-xs font-bold text-slate-700">E-mail (Opcional)</label>
+                <input
+                  type="email"
+                  value={email}
+                  onChange={(e) => setEmail(e.target.value)}
+                  placeholder="Ex: maria.clara@gmail.com"
+                  className="w-full px-3.5 py-2.5 rounded-xl bg-pink-50/40 border border-pink-100 text-xs font-medium text-slate-800 focus:bg-white focus:outline-hidden focus:ring-2 focus:ring-[#ac2471]/20"
+                />
+              </div>
+
+              {/* Row 3: Endereço Completo */}
+              <div className="space-y-1">
+                <label className="text-xs font-bold text-slate-700">Endereço Completo de Entrega (Opcional)</label>
                 <input
                   type="text"
                   value={address}
@@ -621,6 +508,7 @@ export const ClientesView: React.FC<ClientesViewProps> = ({
                 />
               </div>
 
+              {/* Row 4: Cidade, Estado, CEP */}
               <div className="grid grid-cols-3 gap-3">
                 <div className="space-y-1">
                   <label className="text-[11px] font-bold text-slate-700">Cidade</label>
@@ -629,7 +517,7 @@ export const ClientesView: React.FC<ClientesViewProps> = ({
                     value={city}
                     onChange={(e) => setCity(e.target.value)}
                     placeholder="São Paulo"
-                    className="w-full px-3 py-2 rounded-xl bg-pink-50/40 border border-pink-100 text-xs font-medium text-slate-800"
+                    className="w-full px-3 py-2 rounded-xl bg-pink-50/40 border border-pink-100 text-xs font-medium text-slate-800 focus:bg-white focus:outline-hidden focus:ring-2 focus:ring-[#ac2471]/20"
                   />
                 </div>
                 <div className="space-y-1">
@@ -639,7 +527,7 @@ export const ClientesView: React.FC<ClientesViewProps> = ({
                     value={state}
                     onChange={(e) => setState(e.target.value)}
                     placeholder="SP"
-                    className="w-full px-3 py-2 rounded-xl bg-pink-50/40 border border-pink-100 text-xs font-medium text-slate-800"
+                    className="w-full px-3 py-2 rounded-xl bg-pink-50/40 border border-pink-100 text-xs font-medium text-slate-800 focus:bg-white focus:outline-hidden focus:ring-2 focus:ring-[#ac2471]/20"
                   />
                 </div>
                 <div className="space-y-1">
@@ -649,12 +537,12 @@ export const ClientesView: React.FC<ClientesViewProps> = ({
                     value={zipCode}
                     onChange={(e) => setZipCode(e.target.value)}
                     placeholder="01310-100"
-                    className="w-full px-3 py-2 rounded-xl bg-pink-50/40 border border-pink-100 text-xs font-medium text-slate-800"
+                    className="w-full px-3 py-2 rounded-xl bg-pink-50/40 border border-pink-100 text-xs font-medium text-slate-800 focus:bg-white focus:outline-hidden focus:ring-2 focus:ring-[#ac2471]/20"
                   />
                 </div>
               </div>
 
-              {/* Row 6: Observações & Preferências */}
+              {/* Row 5: Observações & Preferências */}
               <div className="space-y-1">
                 <label className="text-xs font-bold text-slate-700">
                   Preferências Especiais & Observações do Cliente

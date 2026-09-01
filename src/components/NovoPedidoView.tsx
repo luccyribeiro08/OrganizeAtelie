@@ -443,7 +443,7 @@ export const NovoPedidoView: React.FC<NovoPedidoViewProps> = ({
                   <option value="">-- Selecione uma cliente cadastrada no ateliê --</option>
                   {clients.map((c) => (
                     <option key={c.id} value={c.id}>
-                      👤 {c.name} • Tel: {c.phone} {c.childName ? `• Filho(a): ${c.childName}` : ''}
+                      👤 {c.name} • Tel: {c.phone}
                     </option>
                   ))}
                 </select>

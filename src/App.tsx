@@ -267,13 +267,28 @@ export default function App() {
           if (remoteProfile) setProfile(remoteProfile);
         });
         supabaseService.getOrders(currentUser.id).then((remoteOrders) => {
-          if (remoteOrders && remoteOrders.length > 0) setOrders(remoteOrders);
+          if (remoteOrders && remoteOrders.length > 0) {
+            setOrders(remoteOrders);
+            try {
+              localStorage.setItem(`atelie_orders_${currentUser.id}`, JSON.stringify(remoteOrders));
+            } catch (e) {}
+          }
         });
         supabaseService.getCatalog(currentUser.id).then((remoteCatalog) => {
-          if (remoteCatalog && remoteCatalog.length > 0) setCatalog(remoteCatalog);
+          if (remoteCatalog && remoteCatalog.length > 0) {
+            setCatalog(remoteCatalog);
+            try {
+              localStorage.setItem(`atelie_catalog_${currentUser.id}`, JSON.stringify(remoteCatalog));
+            } catch (e) {}
+          }
         });
         supabaseService.getQuotations(currentUser.id).then((remoteQuotes) => {
-          if (remoteQuotes && remoteQuotes.length > 0) setQuotations(remoteQuotes);
+          if (remoteQuotes && remoteQuotes.length > 0) {
+            setQuotations(remoteQuotes);
+            try {
+              localStorage.setItem(`atelie_quotations_${currentUser.id}`, JSON.stringify(remoteQuotes));
+            } catch (e) {}
+          }
         });
       }
     }
@@ -427,8 +442,19 @@ export default function App() {
   };
 
   // Handler: Save New Order
+  // Handler: Save New Order
   const handleSaveOrder = (newOrder: Order) => {
-    setOrders((prev) => [newOrder, ...prev]);
+    setOrders((prev) => {
+      const updated = [newOrder, ...prev];
+      if (currentUser) {
+        try {
+          localStorage.setItem(`atelie_orders_${currentUser.id}`, JSON.stringify(updated));
+        } catch (e) {
+          console.error(e);
+        }
+      }
+      return updated;
+    });
     setOrderDraftToCreate(null);
     if (currentUser && currentUser.id !== 'user-luccy-default') {
       supabaseService.saveOrder(currentUser.id, newOrder);
@@ -436,42 +462,56 @@ export default function App() {
     setActiveTab('pedidos');
   };
 
-  // Handler: Update Order Status
+  // Handler: Update Order Status (Immediate persistence to local & cloud)
   const handleUpdateStatus = (orderId: string, status: OrderStatus) => {
-    let updatedOrderObj: Order | null = null;
-    setOrders((prev) =>
-      prev.map((o) => {
-        if (o.id === orderId) {
-          // If order is already Finalizado, lock it from further status changes
-          if (o.status === 'Finalizado' && status !== 'Finalizado') {
-            return o;
-          }
+    setOrders((prev) => {
+      const target = prev.find((o) => o.id === orderId);
+      if (!target) return prev;
 
-          const isNowFinalized = status === 'Finalizado';
-          const updated: Order = {
-            ...o,
-            status,
-            completedAt: isNowFinalized ? (o.completedAt || new Date().toISOString()) : o.completedAt,
-            financial:
-              isNowFinalized
-                ? {
-                    ...o.financial,
-                    remaining: 0,
-                  }
-                : o.financial,
-            updatedAt: new Date().toISOString(),
-          };
-          updatedOrderObj = updated;
+      // If order is already Finalizado, lock it from further status changes
+      if (target.status === 'Finalizado' && status !== 'Finalizado') {
+        return prev;
+      }
 
-          if (isNowFinalized && o.status !== 'Finalizado') {
-            triggerConfetti();
-          }
+      const isNowFinalized = status === 'Finalizado';
+      const updated: Order = {
+        ...target,
+        status,
+        completedAt: isNowFinalized
+          ? target.completedAt || new Date().toISOString()
+          : target.completedAt,
+        financial: isNowFinalized
+          ? {
+              ...target.financial,
+              remaining: 0,
+            }
+          : target.financial,
+        updatedAt: new Date().toISOString(),
+      };
 
-          return updated;
+      if (isNowFinalized && target.status !== 'Finalizado') {
+        triggerConfetti();
+      }
+
+      const updatedList = prev.map((o) => (o.id === orderId ? updated : o));
+
+      // Persist to localStorage immediately
+      if (currentUser) {
+        try {
+          localStorage.setItem(`atelie_orders_${currentUser.id}`, JSON.stringify(updatedList));
+        } catch (e) {
+          console.error('Error saving updated orders to localStorage', e);
         }
-        return o;
-      })
-    );
+      }
+
+      // Persist to Supabase immediately for cloud accounts
+      if (currentUser && currentUser.id !== 'user-luccy-default') {
+        supabaseService.saveOrder(currentUser.id, updated);
+      }
+
+      return updatedList;
+    });
+
     if (selectedOrder && selectedOrder.id === orderId) {
       if (selectedOrder.status !== 'Finalizado' || status === 'Finalizado') {
         setSelectedOrder((prev) =>
@@ -479,7 +519,10 @@ export default function App() {
             ? {
                 ...prev,
                 status,
-                completedAt: status === 'Finalizado' ? (prev.completedAt || new Date().toISOString()) : prev.completedAt,
+                completedAt:
+                  status === 'Finalizado'
+                    ? prev.completedAt || new Date().toISOString()
+                    : prev.completedAt,
                 financial:
                   status === 'Finalizado'
                     ? {
@@ -487,19 +530,27 @@ export default function App() {
                         remaining: 0,
                       }
                     : prev.financial,
+                updatedAt: new Date().toISOString(),
               }
             : null
         );
       }
     }
-    if (currentUser && currentUser.id !== 'user-luccy-default' && updatedOrderObj) {
-      supabaseService.saveOrder(currentUser.id, updatedOrderObj);
-    }
   };
 
   // Handler: Delete Order
   const handleDeleteOrder = (orderId: string) => {
-    setOrders((prev) => prev.filter((o) => o.id !== orderId));
+    setOrders((prev) => {
+      const updatedList = prev.filter((o) => o.id !== orderId);
+      if (currentUser) {
+        try {
+          localStorage.setItem(`atelie_orders_${currentUser.id}`, JSON.stringify(updatedList));
+        } catch (e) {
+          console.error(e);
+        }
+      }
+      return updatedList;
+    });
     if (selectedOrder && selectedOrder.id === orderId) {
       setSelectedOrder(null);
     }

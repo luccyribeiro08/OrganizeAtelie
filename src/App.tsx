@@ -16,6 +16,7 @@ import { OrderInProductionNotificationModal } from './components/OrderInProducti
 import { AuthView } from './components/AuthView';
 import { ActiveTab, AtelieProfile, CatalogItem, Client, Order, OrderStatus, Quotation, UserAccount } from './types';
 import {
+  DEFAULT_CATALOG_CATEGORIES,
   INITIAL_ATELIE_PROFILE,
   INITIAL_CATALOG,
   INITIAL_CLIENTS,
@@ -204,6 +205,20 @@ export default function App() {
     return [];
   };
 
+  // Helper to load user catalog categories
+  const loadUserCategories = (user: UserAccount): string[] => {
+    try {
+      const saved = localStorage.getItem(`atelie_categories_${user.id}`);
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        if (Array.isArray(parsed) && parsed.length > 0) return parsed;
+      }
+    } catch (e) {
+      console.error(e);
+    }
+    return DEFAULT_CATALOG_CATEGORIES;
+  };
+
   // Helper to load user quotations
   const loadUserQuotations = (user: UserAccount): Quotation[] => {
     try {
@@ -239,6 +254,10 @@ export default function App() {
 
   const [catalog, setCatalog] = useState<CatalogItem[]>(() =>
     currentUser ? loadUserCatalog(currentUser) : []
+  );
+
+  const [catalogCategories, setCatalogCategories] = useState<string[]>(() =>
+    currentUser ? loadUserCategories(currentUser) : DEFAULT_CATALOG_CATEGORIES
   );
 
   const [quotations, setQuotations] = useState<Quotation[]>(() =>
@@ -283,6 +302,7 @@ export default function App() {
       setProfile(loadUserProfile(currentUser));
       setOrders(loadUserOrders(currentUser));
       setCatalog(loadUserCatalog(currentUser));
+      setCatalogCategories(loadUserCategories(currentUser));
       setQuotations(loadUserQuotations(currentUser));
       setClients(loadUserClients(currentUser));
 
@@ -346,6 +366,16 @@ export default function App() {
       console.error('Error saving user catalog', e);
     }
   }, [catalog, currentUser?.id]);
+
+  // Save Categories for current user
+  useEffect(() => {
+    if (!currentUser) return;
+    try {
+      localStorage.setItem(`atelie_categories_${currentUser.id}`, JSON.stringify(catalogCategories));
+    } catch (e) {
+      console.error('Error saving user categories', e);
+    }
+  }, [catalogCategories, currentUser?.id]);
 
   // Save Quotations for current user
   useEffect(() => {
@@ -800,6 +830,66 @@ export default function App() {
     }
   };
 
+  // Handler: Update Catalog Categories (Add, Rename, Delete)
+  const handleUpdateCategories = (
+    newCategories: string[],
+    renamedMap?: { oldName: string; newName: string },
+    deletedCategory?: string
+  ) => {
+    setCatalogCategories(newCategories);
+
+    if (currentUser) {
+      try {
+        localStorage.setItem(`atelie_categories_${currentUser.id}`, JSON.stringify(newCategories));
+      } catch (e) {
+        console.error(e);
+      }
+    }
+
+    if (renamedMap) {
+      setCatalog((prev) => {
+        const updated = prev.map((item) =>
+          item.category === renamedMap.oldName ? { ...item, category: renamedMap.newName } : item
+        );
+        if (currentUser) {
+          try {
+            localStorage.setItem(`atelie_catalog_${currentUser.id}`, JSON.stringify(updated));
+          } catch (e) {}
+          if (currentUser.id !== 'user-luccy-default') {
+            updated.forEach((item) => {
+              if (item.category === renamedMap.newName) {
+                supabaseService.saveCatalogItem(currentUser.id, item);
+              }
+            });
+          }
+        }
+        return updated;
+      });
+    }
+
+    if (deletedCategory) {
+      const fallbackCat = newCategories.length > 0 ? newCategories[0] : 'Geral';
+      setCatalog((prev) => {
+        const updated = prev.map((item) =>
+          item.category === deletedCategory ? { ...item, category: fallbackCat } : item
+        );
+        if (currentUser) {
+          try {
+            localStorage.setItem(`atelie_catalog_${currentUser.id}`, JSON.stringify(updated));
+          } catch (e) {}
+          if (currentUser.id !== 'user-luccy-default') {
+            updated.forEach((item) => {
+              if (item.category === fallbackCat) {
+                supabaseService.saveCatalogItem(currentUser.id, item);
+              }
+            });
+          }
+        }
+        return updated;
+      });
+    }
+  };
+
   // Handler: Select product to create order
   const handleSelectProductForOrder = (item: CatalogItem) => {
     setActiveTab('criar-pedido');
@@ -870,11 +960,12 @@ export default function App() {
   // Backup handlers
   const handleExportData = () => {
     const backupData = {
-      version: '2.1',
+      version: '2.2',
       user: currentUser?.email,
       exportedAt: new Date().toISOString(),
       profile,
       catalog,
+      categories: catalogCategories,
       orders,
       quotations,
       clients,
@@ -917,6 +1008,14 @@ export default function App() {
             if (currentUser.id !== 'user-luccy-default') {
               parsed.catalog.forEach((c: CatalogItem) => supabaseService.saveCatalogItem(currentUser.id, c));
             }
+          }
+        }
+        if (parsed.categories && Array.isArray(parsed.categories)) {
+          setCatalogCategories(parsed.categories);
+          if (currentUser) {
+            try {
+              localStorage.setItem(`atelie_categories_${currentUser.id}`, JSON.stringify(parsed.categories));
+            } catch (e) {}
           }
         }
         if (parsed.quotations && Array.isArray(parsed.quotations)) {
@@ -1047,10 +1146,12 @@ export default function App() {
           {activeTab === 'catalogo' && (
             <CatalogoView
               catalog={catalog}
+              categories={catalogCategories}
               onAddCatalogItem={handleAddCatalogItem}
               onUpdateCatalogItem={handleUpdateCatalogItem}
               onDeleteCatalogItem={handleDeleteCatalogItem}
               onSelectProductForOrder={handleSelectProductForOrder}
+              onUpdateCategories={handleUpdateCategories}
             />
           )}
 

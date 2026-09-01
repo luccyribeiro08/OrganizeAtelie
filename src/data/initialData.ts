@@ -71,6 +71,15 @@ export const INITIAL_ATELIE_PROFILE: AtelieProfile = {
   avatarUrl: '/logo.png',
 };
 
+export const DEFAULT_CATALOG_CATEGORIES: string[] = [
+  'Topos de Bolo',
+  'Kit Festa',
+  'Cadernos & Planners',
+  'Lembrancinhas',
+  'Papelaria Escolar',
+  'Papelaria Corporativa'
+];
+
 export const INITIAL_CATALOG: CatalogItem[] = [
   {
     id: 'cat-1',

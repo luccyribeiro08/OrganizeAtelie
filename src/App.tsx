@@ -561,7 +561,17 @@ export default function App() {
 
   // Handler: Add Catalog Item
   const handleAddCatalogItem = (item: CatalogItem) => {
-    setCatalog((prev) => [item, ...prev]);
+    setCatalog((prev) => {
+      const updated = [item, ...prev];
+      if (currentUser) {
+        try {
+          localStorage.setItem(`atelie_catalog_${currentUser.id}`, JSON.stringify(updated));
+        } catch (e) {
+          console.error(e);
+        }
+      }
+      return updated;
+    });
     if (currentUser && currentUser.id !== 'user-luccy-default') {
       supabaseService.saveCatalogItem(currentUser.id, item);
     }
@@ -569,7 +579,17 @@ export default function App() {
 
   // Handler: Update Catalog Item
   const handleUpdateCatalogItem = (item: CatalogItem) => {
-    setCatalog((prev) => prev.map((c) => (c.id === item.id ? item : c)));
+    setCatalog((prev) => {
+      const updated = prev.map((c) => (c.id === item.id ? item : c));
+      if (currentUser) {
+        try {
+          localStorage.setItem(`atelie_catalog_${currentUser.id}`, JSON.stringify(updated));
+        } catch (e) {
+          console.error(e);
+        }
+      }
+      return updated;
+    });
     if (currentUser && currentUser.id !== 'user-luccy-default') {
       supabaseService.saveCatalogItem(currentUser.id, item);
     }
@@ -577,7 +597,17 @@ export default function App() {
 
   // Handler: Delete Catalog Item
   const handleDeleteCatalogItem = (itemId: string) => {
-    setCatalog((prev) => prev.filter((c) => c.id !== itemId));
+    setCatalog((prev) => {
+      const updated = prev.filter((c) => c.id !== itemId);
+      if (currentUser) {
+        try {
+          localStorage.setItem(`atelie_catalog_${currentUser.id}`, JSON.stringify(updated));
+        } catch (e) {
+          console.error(e);
+        }
+      }
+      return updated;
+    });
     if (currentUser && currentUser.id !== 'user-luccy-default') {
       supabaseService.deleteCatalogItem(itemId);
     }
@@ -592,10 +622,15 @@ export default function App() {
   const handleSaveQuotation = (quote: Quotation) => {
     setQuotations((prev) => {
       const exists = prev.some((q) => q.id === quote.id);
-      if (exists) {
-        return prev.map((q) => (q.id === quote.id ? quote : q));
+      const updated = exists ? prev.map((q) => (q.id === quote.id ? quote : q)) : [quote, ...prev];
+      if (currentUser) {
+        try {
+          localStorage.setItem(`atelie_quotations_${currentUser.id}`, JSON.stringify(updated));
+        } catch (e) {
+          console.error(e);
+        }
       }
-      return [quote, ...prev];
+      return updated;
     });
     if (currentUser && currentUser.id !== 'user-luccy-default') {
       supabaseService.saveQuotation(currentUser.id, quote);
@@ -604,7 +639,17 @@ export default function App() {
 
   // Handler: Delete Quotation
   const handleDeleteQuotation = (quoteId: string) => {
-    setQuotations((prev) => prev.filter((q) => q.id !== quoteId));
+    setQuotations((prev) => {
+      const updated = prev.filter((q) => q.id !== quoteId);
+      if (currentUser) {
+        try {
+          localStorage.setItem(`atelie_quotations_${currentUser.id}`, JSON.stringify(updated));
+        } catch (e) {
+          console.error(e);
+        }
+      }
+      return updated;
+    });
     if (currentUser && currentUser.id !== 'user-luccy-default') {
       supabaseService.deleteQuotation(quoteId);
     }
@@ -612,6 +657,25 @@ export default function App() {
 
   // Handler: Approve and Create Order from Quote
   const handleApproveAndCreateOrder = (partialOrder: Partial<Order>, quoteId?: string) => {
+    if (quoteId) {
+      setQuotations((prev) => {
+        const updated = prev.map((q) =>
+          q.id === quoteId
+            ? { ...q, status: 'Aprovado' as const, updatedAt: new Date().toISOString() }
+            : q
+        );
+        if (currentUser) {
+          try {
+            localStorage.setItem(`atelie_quotations_${currentUser.id}`, JSON.stringify(updated));
+          } catch (e) {}
+          if (currentUser.id !== 'user-luccy-default') {
+            const found = updated.find((q) => q.id === quoteId);
+            if (found) supabaseService.saveQuotation(currentUser.id, found);
+          }
+        }
+        return updated;
+      });
+    }
     setOrderDraftToCreate(partialOrder);
     setActiveTab('criar-pedido');
   };
@@ -625,6 +689,7 @@ export default function App() {
       profile,
       catalog,
       orders,
+      quotations,
     };
     const blob = new Blob([JSON.stringify(backupData, null, 2)], {
       type: 'application/json',
@@ -646,14 +711,41 @@ export default function App() {
         const parsed = JSON.parse(event.target?.result as string);
         if (parsed.orders && Array.isArray(parsed.orders)) {
           setOrders(parsed.orders);
+          if (currentUser) {
+            try {
+              localStorage.setItem(`atelie_orders_${currentUser.id}`, JSON.stringify(parsed.orders));
+            } catch (e) {}
+            if (currentUser.id !== 'user-luccy-default') {
+              parsed.orders.forEach((o: Order) => supabaseService.saveOrder(currentUser.id, o));
+            }
+          }
         }
         if (parsed.catalog && Array.isArray(parsed.catalog)) {
           setCatalog(parsed.catalog);
+          if (currentUser) {
+            try {
+              localStorage.setItem(`atelie_catalog_${currentUser.id}`, JSON.stringify(parsed.catalog));
+            } catch (e) {}
+            if (currentUser.id !== 'user-luccy-default') {
+              parsed.catalog.forEach((c: CatalogItem) => supabaseService.saveCatalogItem(currentUser.id, c));
+            }
+          }
+        }
+        if (parsed.quotations && Array.isArray(parsed.quotations)) {
+          setQuotations(parsed.quotations);
+          if (currentUser) {
+            try {
+              localStorage.setItem(`atelie_quotations_${currentUser.id}`, JSON.stringify(parsed.quotations));
+            } catch (e) {}
+            if (currentUser.id !== 'user-luccy-default') {
+              parsed.quotations.forEach((q: Quotation) => supabaseService.saveQuotation(currentUser.id, q));
+            }
+          }
         }
         if (parsed.profile) {
           handleUpdateProfile(parsed.profile);
         }
-        alert('Backup restaurado com sucesso!');
+        alert('Backup restaurado e sincronizado com a nuvem com sucesso!');
       } catch (err) {
         alert('Erro ao importar arquivo JSON. Certifique-se de que é um backup válido.');
       }

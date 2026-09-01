@@ -189,6 +189,42 @@ export const supabaseService = {
     }
   },
 
+  // --- CATALOG CATEGORIES ---
+  async getCatalogCategories(userId: string): Promise<string[]> {
+    try {
+      const { data, error } = await supabase
+        .from('catalog_categories')
+        .select('name')
+        .eq('user_id', userId)
+        .order('created_at', { ascending: true });
+
+      if (error || !data || data.length === 0) return [];
+      return data.map((d: any) => d.name);
+    } catch (e) {
+      console.error('Error fetching catalog categories from Supabase', e);
+      return [];
+    }
+  },
+
+  async saveCatalogCategories(userId: string, categories: string[]): Promise<boolean> {
+    try {
+      const rows = categories.map((cat, idx) => ({
+        id: `cat-grp-${userId}-${idx}-${cat.toLowerCase().replace(/[^a-z0-9]/g, '')}`,
+        user_id: userId,
+        name: cat,
+      }));
+      await supabase.from('catalog_categories').delete().eq('user_id', userId);
+      if (rows.length > 0) {
+        const { error } = await supabase.from('catalog_categories').insert(rows);
+        return !error;
+      }
+      return true;
+    } catch (e) {
+      console.error('Error saving catalog categories to Supabase', e);
+      return false;
+    }
+  },
+
   // --- QUOTATIONS ---
   async getQuotations(userId: string): Promise<Quotation[]> {
     try {

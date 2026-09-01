@@ -17,6 +17,7 @@ import { AuthView } from './components/AuthView';
 import { ActiveTab, AtelieProfile, CatalogItem, Client, Order, OrderStatus, Quotation, UserAccount } from './types';
 import {
   DEFAULT_CATALOG_CATEGORIES,
+  DEFAULT_ORDER_TYPES,
   INITIAL_ATELIE_PROFILE,
   INITIAL_CATALOG,
   INITIAL_CLIENTS,
@@ -219,6 +220,20 @@ export default function App() {
     return DEFAULT_CATALOG_CATEGORIES;
   };
 
+  // Helper to load user order types
+  const loadUserOrderTypes = (user: UserAccount): string[] => {
+    try {
+      const saved = localStorage.getItem(`atelie_order_types_${user.id}`);
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        if (Array.isArray(parsed) && parsed.length > 0) return parsed;
+      }
+    } catch (e) {
+      console.error(e);
+    }
+    return DEFAULT_ORDER_TYPES;
+  };
+
   // Helper to load user quotations
   const loadUserQuotations = (user: UserAccount): Quotation[] => {
     try {
@@ -258,6 +273,10 @@ export default function App() {
 
   const [catalogCategories, setCatalogCategories] = useState<string[]>(() =>
     currentUser ? loadUserCategories(currentUser) : DEFAULT_CATALOG_CATEGORIES
+  );
+
+  const [orderTypes, setOrderTypes] = useState<string[]>(() =>
+    currentUser ? loadUserOrderTypes(currentUser) : DEFAULT_ORDER_TYPES
   );
 
   const [quotations, setQuotations] = useState<Quotation[]>(() =>
@@ -303,6 +322,7 @@ export default function App() {
       setOrders(loadUserOrders(currentUser));
       setCatalog(loadUserCatalog(currentUser));
       setCatalogCategories(loadUserCategories(currentUser));
+      setOrderTypes(loadUserOrderTypes(currentUser));
       setQuotations(loadUserQuotations(currentUser));
       setClients(loadUserClients(currentUser));
 
@@ -324,6 +344,14 @@ export default function App() {
             setCatalog(remoteCatalog);
             try {
               localStorage.setItem(`atelie_catalog_${currentUser.id}`, JSON.stringify(remoteCatalog));
+            } catch (e) {}
+          }
+        });
+        supabaseService.getCatalogCategories(currentUser.id).then((remoteCats) => {
+          if (remoteCats && remoteCats.length > 0) {
+            setCatalogCategories(remoteCats);
+            try {
+              localStorage.setItem(`atelie_categories_${currentUser.id}`, JSON.stringify(remoteCats));
             } catch (e) {}
           }
         });
@@ -376,6 +404,16 @@ export default function App() {
       console.error('Error saving user categories', e);
     }
   }, [catalogCategories, currentUser?.id]);
+
+  // Save Order Types for current user
+  useEffect(() => {
+    if (!currentUser) return;
+    try {
+      localStorage.setItem(`atelie_order_types_${currentUser.id}`, JSON.stringify(orderTypes));
+    } catch (e) {
+      console.error('Error saving user order types', e);
+    }
+  }, [orderTypes, currentUser?.id]);
 
   // Save Quotations for current user
   useEffect(() => {
@@ -844,6 +882,9 @@ export default function App() {
       } catch (e) {
         console.error(e);
       }
+      if (currentUser.id !== 'user-luccy-default') {
+        supabaseService.saveCatalogCategories(currentUser.id, newCategories);
+      }
     }
 
     if (renamedMap) {
@@ -887,6 +928,22 @@ export default function App() {
         }
         return updated;
       });
+    }
+  };
+
+  // Handler: Update Order Types (Add, Rename, Delete)
+  const handleUpdateOrderTypes = (
+    newTypes: string[],
+    renamedMap?: { oldName: string; newName: string },
+    deletedType?: string
+  ) => {
+    setOrderTypes(newTypes);
+    if (currentUser) {
+      try {
+        localStorage.setItem(`atelie_order_types_${currentUser.id}`, JSON.stringify(newTypes));
+      } catch (e) {
+        console.error(e);
+      }
     }
   };
 
@@ -960,12 +1017,13 @@ export default function App() {
   // Backup handlers
   const handleExportData = () => {
     const backupData = {
-      version: '2.2',
+      version: '2.3',
       user: currentUser?.email,
       exportedAt: new Date().toISOString(),
       profile,
       catalog,
       categories: catalogCategories,
+      orderTypes,
       orders,
       quotations,
       clients,
@@ -1018,6 +1076,14 @@ export default function App() {
             } catch (e) {}
           }
         }
+        if (parsed.orderTypes && Array.isArray(parsed.orderTypes)) {
+          setOrderTypes(parsed.orderTypes);
+          if (currentUser) {
+            try {
+              localStorage.setItem(`atelie_order_types_${currentUser.id}`, JSON.stringify(parsed.orderTypes));
+            } catch (e) {}
+          }
+        }
         if (parsed.quotations && Array.isArray(parsed.quotations)) {
           setQuotations(parsed.quotations);
           if (currentUser) {
@@ -1041,14 +1107,24 @@ export default function App() {
           }
         }
         if (parsed.profile) {
-          handleUpdateProfile(parsed.profile);
+          setProfile(parsed.profile);
+          if (currentUser) {
+            try {
+              localStorage.setItem(`atelie_profile_${currentUser.id}`, JSON.stringify(parsed.profile));
+            } catch (e) {}
+            if (currentUser.id !== 'user-luccy-default') {
+              supabaseService.saveProfile(currentUser.id, parsed.profile);
+            }
+          }
         }
-        alert('Backup restaurado e sincronizado com a nuvem com sucesso!');
+        alert('Dados restaurados com sucesso!');
       } catch (err) {
-        alert('Erro ao importar arquivo JSON. Certifique-se de que é um backup válido.');
+        console.error('Erro ao importar backup', err);
+        alert('Arquivo de backup inválido ou corrompido.');
       }
     };
     reader.readAsText(file);
+    e.target.value = '';
   };
 
   // If user is not logged in, block dashboard access and show AuthView
@@ -1076,8 +1152,8 @@ export default function App() {
   }).length;
 
   return (
-    <div className="min-h-screen bg-[#fbf9f8] flex text-[#1b1c1c]">
-      {/* Sidebar Navigation */}
+    <div className="min-h-screen bg-[#faf7f8] text-slate-900 flex font-sans antialiased selection:bg-[#ffd1dc] selection:text-[#ac2471]">
+      {/* Desktop & Mobile Sidebar */}
       <Sidebar
         activeTab={activeTab}
         setActiveTab={setActiveTab}
@@ -1092,10 +1168,11 @@ export default function App() {
       />
 
       {/* Main Content Area */}
-      <div className="flex-1 flex flex-col min-w-0 lg:pl-64">
-        {/* Top Header Bar */}
+      <div className="flex-1 flex flex-col min-w-0 pb-16 md:pb-0 overflow-x-hidden">
+        {/* Top Header */}
         <Header
           profile={profile}
+          currentUser={currentUser}
           orders={orders}
           onOpenMobileMenu={() => setIsOpenMobile(true)}
           onSelectOrder={(ord) => setSelectedOrder(ord)}
@@ -1109,10 +1186,12 @@ export default function App() {
             <NovoPedidoView
               catalog={catalog}
               clients={clients}
+              orderTypes={orderTypes}
               initialData={orderDraftToCreate}
               onClearInitialData={() => setOrderDraftToCreate(null)}
               onSaveOrder={handleSaveOrder}
               onNavigateToCatalog={() => setActiveTab('catalogo')}
+              onUpdateOrderTypes={handleUpdateOrderTypes}
             />
           )}
 

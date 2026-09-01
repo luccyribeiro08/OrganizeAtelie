@@ -80,6 +80,17 @@ export const DEFAULT_CATALOG_CATEGORIES: string[] = [
   'Papelaria Corporativa'
 ];
 
+export const DEFAULT_ORDER_TYPES: string[] = [
+  'Topo de Bolo & Lembrancinhas',
+  'Kit Festa Escolar',
+  'Kit Caixas Cenário Luxo',
+  'Cadernos & Planners Artesanais',
+  'Lembrancinhas Maternidade / Batizado',
+  'Papelaria Corporativa & Tags',
+  'Convites Interativos',
+  'Outro Personalizado'
+];
+
 export const INITIAL_CATALOG: CatalogItem[] = [
   {
     id: 'cat-1',

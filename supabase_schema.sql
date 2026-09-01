@@ -1,6 +1,6 @@
 -- ============================================================
 -- ORGANIZE ATELIÊ - SUPABASE DATABASE SCHEMA (COMPLETO E ATUALIZADO)
--- Tabelas: profiles, orders, catalog, quotations, calendar_events, clients
+-- Tabelas: profiles, orders, catalog, catalog_categories, quotations, calendar_events, clients
 -- ============================================================
 
 -- 1. Habilitar extensões úteis
@@ -12,6 +12,7 @@ CREATE EXTENSION IF NOT EXISTS "uuid-ossp";
 CREATE TABLE IF NOT EXISTS public.profiles (
   id TEXT PRIMARY KEY,
   name TEXT NOT NULL,
+  owner_name TEXT,
   atelie_name TEXT,
   email TEXT UNIQUE NOT NULL,
   phone TEXT,
@@ -22,9 +23,28 @@ CREATE TABLE IF NOT EXISTS public.profiles (
   address TEXT,
   avatar_url TEXT,
   logo_url TEXT,
+  catalog_categories TEXT[] DEFAULT ARRAY['Topos de Bolo', 'Kit Festa', 'Cadernos & Planners', 'Lembrancinhas', 'Papelaria Escolar', 'Papelaria Corporativa']::text[],
   created_at TIMESTAMPTZ DEFAULT NOW(),
   updated_at TIMESTAMPTZ DEFAULT NOW()
 );
+
+-- Garantir colunas adicionais em profiles caso a tabela já existisse
+DO $$ 
+BEGIN 
+  IF NOT EXISTS (
+    SELECT 1 FROM information_schema.columns 
+    WHERE table_schema = 'public' AND table_name = 'profiles' AND column_name = 'owner_name'
+  ) THEN
+    ALTER TABLE public.profiles ADD COLUMN owner_name TEXT;
+  END IF;
+
+  IF NOT EXISTS (
+    SELECT 1 FROM information_schema.columns 
+    WHERE table_schema = 'public' AND table_name = 'profiles' AND column_name = 'catalog_categories'
+  ) THEN
+    ALTER TABLE public.profiles ADD COLUMN catalog_categories TEXT[] DEFAULT ARRAY['Topos de Bolo', 'Kit Festa', 'Cadernos & Planners', 'Lembrancinhas', 'Papelaria Escolar', 'Papelaria Corporativa']::text[];
+  END IF;
+END $$;
 
 -- ============================================================
 -- 3. Tabela de Pedidos
@@ -88,7 +108,17 @@ CREATE TABLE IF NOT EXISTS public.catalog (
 );
 
 -- ============================================================
--- 5. Tabela de Orçamentos Salvos & Precificação
+-- 5. Tabela de Categorias Customizadas do Catálogo
+-- ============================================================
+CREATE TABLE IF NOT EXISTS public.catalog_categories (
+  id TEXT PRIMARY KEY,
+  user_id TEXT NOT NULL,
+  name TEXT NOT NULL,
+  created_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+-- ============================================================
+-- 6. Tabela de Orçamentos Salvos & Precificação
 -- ============================================================
 CREATE TABLE IF NOT EXISTS public.quotations (
   id TEXT PRIMARY KEY,
@@ -140,7 +170,7 @@ BEGIN
 END $$;
 
 -- ============================================================
--- 6. Tabela de Agenda & Prazos de Ateliê
+-- 7. Tabela de Agenda & Prazos de Ateliê
 -- ============================================================
 CREATE TABLE IF NOT EXISTS public.calendar_events (
   id TEXT PRIMARY KEY,
@@ -158,7 +188,7 @@ CREATE TABLE IF NOT EXISTS public.calendar_events (
 );
 
 -- ============================================================
--- 7. Tabela de Clientes Cadastrados
+-- 8. Tabela de Clientes Cadastrados
 -- ============================================================
 CREATE TABLE IF NOT EXISTS public.clients (
   id TEXT PRIMARY KEY,
@@ -181,12 +211,13 @@ CREATE TABLE IF NOT EXISTS public.clients (
 );
 
 -- ============================================================
--- 8. Índices de Otimização e Performance
+-- 9. Índices de Otimização e Performance
 -- ============================================================
 CREATE INDEX IF NOT EXISTS idx_orders_user_id ON public.orders(user_id);
 CREATE INDEX IF NOT EXISTS idx_orders_delivery_date ON public.orders(delivery_date);
 CREATE INDEX IF NOT EXISTS idx_orders_status ON public.orders(status);
 CREATE INDEX IF NOT EXISTS idx_catalog_user_id ON public.catalog(user_id);
+CREATE INDEX IF NOT EXISTS idx_catalog_categories_user_id ON public.catalog_categories(user_id);
 CREATE INDEX IF NOT EXISTS idx_quotations_user_id ON public.quotations(user_id);
 CREATE INDEX IF NOT EXISTS idx_quotations_status ON public.quotations(status);
 CREATE INDEX IF NOT EXISTS idx_calendar_events_user_id ON public.calendar_events(user_id);
@@ -196,18 +227,19 @@ CREATE INDEX IF NOT EXISTS idx_clients_name ON public.clients(name);
 CREATE INDEX IF NOT EXISTS idx_clients_phone ON public.clients(phone);
 
 -- ============================================================
--- 9. Habilitar Row Level Security (RLS)
+-- 10. Habilitar Row Level Security (RLS)
 -- ============================================================
 ALTER TABLE public.profiles ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.orders ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.catalog ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.catalog_categories ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.quotations ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.calendar_events ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.clients ENABLE ROW LEVEL SECURITY;
 
 -- ============================================================
--- 10. Políticas de Acesso (RLS Policies)
--- Permitem leitura, inserção, atualização e exclusão seguras
+-- 11. Políticas de Acesso (RLS Policies)
+-- Permitem leitura, inserção, atualização e exclusão completas
 -- ============================================================
 DROP POLICY IF EXISTS "Permitir acesso completo a profiles" ON public.profiles;
 CREATE POLICY "Permitir acesso completo a profiles" ON public.profiles FOR ALL USING (true) WITH CHECK (true);
@@ -217,6 +249,9 @@ CREATE POLICY "Permitir acesso completo a orders" ON public.orders FOR ALL USING
 
 DROP POLICY IF EXISTS "Permitir acesso completo a catalog" ON public.catalog;
 CREATE POLICY "Permitir acesso completo a catalog" ON public.catalog FOR ALL USING (true) WITH CHECK (true);
+
+DROP POLICY IF EXISTS "Permitir acesso completo a catalog_categories" ON public.catalog_categories;
+CREATE POLICY "Permitir acesso completo a catalog_categories" ON public.catalog_categories FOR ALL USING (true) WITH CHECK (true);
 
 DROP POLICY IF EXISTS "Permitir acesso completo a quotations" ON public.quotations;
 CREATE POLICY "Permitir acesso completo a quotations" ON public.quotations FOR ALL USING (true) WITH CHECK (true);

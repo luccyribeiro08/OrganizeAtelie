@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import {
   Calendar,
   Check,
@@ -8,10 +8,14 @@ import {
   HelpCircle,
   Image as ImageIcon,
   Lock,
+  Pencil,
   Plus,
   RotateCcw,
   Save,
+  Settings,
   Sparkles,
+  Tag,
+  Tags,
   Trash2,
   Upload,
   User,
@@ -38,24 +42,32 @@ import {
   parseNumberInput
 } from '../utils/helpers';
 import { DecimalInput } from './DecimalInput';
-import { INSPIRATIONS } from '../data/initialData';
+import { DEFAULT_ORDER_TYPES, INSPIRATIONS } from '../data/initialData';
 
 interface NovoPedidoViewProps {
   catalog: CatalogItem[];
   clients?: Client[];
+  orderTypes?: string[];
   initialData?: Partial<Order> | null;
   onClearInitialData?: () => void;
   onSaveOrder: (order: Order, isDraft?: boolean) => void;
   onNavigateToCatalog?: () => void;
+  onUpdateOrderTypes?: (
+    newOrderTypes: string[],
+    renamedMap?: { oldName: string; newName: string },
+    deletedType?: string
+  ) => void;
 }
 
 export const NovoPedidoView: React.FC<NovoPedidoViewProps> = ({
   catalog,
   clients = [],
+  orderTypes = DEFAULT_ORDER_TYPES,
   initialData,
   onClearInitialData,
   onSaveOrder,
-  onNavigateToCatalog
+  onNavigateToCatalog,
+  onUpdateOrderTypes
 }) => {
   // Form State
   const [clientName, setClientName] = useState('');
@@ -73,6 +85,87 @@ export const NovoPedidoView: React.FC<NovoPedidoViewProps> = ({
   const [theme, setTheme] = useState('');
   const [origin, setOrigin] = useState<OrderOrigin>('WhatsApp');
   const [orderType, setOrderType] = useState('Topo de Bolo & Lembrancinhas');
+
+  // Active Order Types Management
+  const activeOrderTypes = orderTypes && orderTypes.length > 0 ? orderTypes : DEFAULT_ORDER_TYPES;
+  const orderTypesList = useMemo(() => {
+    const list = [...activeOrderTypes];
+    if (orderType && !list.includes(orderType)) {
+      list.push(orderType);
+    }
+    return list.filter((t) => t && t.trim().length > 0);
+  }, [activeOrderTypes, orderType]);
+
+  const [showOrderTypeModal, setShowOrderTypeModal] = useState(false);
+  const [newOrderTypeInput, setNewOrderTypeInput] = useState('');
+  const [editingOrderTypeIndex, setEditingOrderTypeIndex] = useState<number | null>(null);
+  const [editingOrderTypeName, setEditingOrderTypeName] = useState('');
+  const [orderTypeFeedback, setOrderTypeFeedback] = useState<string | null>(null);
+
+  const [showInlineNewOrderType, setShowInlineNewOrderType] = useState(false);
+  const [inlineNewOrderTypeName, setInlineNewOrderTypeName] = useState('');
+
+  const handleAddOrderType = (nameToAdd: string) => {
+    const trimmed = nameToAdd.trim();
+    if (!trimmed) {
+      setOrderTypeFeedback('O nome do tipo de pedido não pode estar vazio.');
+      return;
+    }
+    if (activeOrderTypes.some((t) => t.toLowerCase() === trimmed.toLowerCase())) {
+      setOrderTypeFeedback('Este tipo de pedido já existe.');
+      return;
+    }
+    const updated = [...activeOrderTypes, trimmed];
+    if (onUpdateOrderTypes) {
+      onUpdateOrderTypes(updated);
+    }
+    setOrderType(trimmed);
+    setNewOrderTypeInput('');
+    setOrderTypeFeedback(null);
+  };
+
+  const handleRenameOrderType = (oldName: string, newName: string) => {
+    const trimmed = newName.trim();
+    if (!trimmed) {
+      setOrderTypeFeedback('O nome do tipo de pedido não pode estar vazio.');
+      return;
+    }
+    if (
+      trimmed.toLowerCase() !== oldName.toLowerCase() &&
+      activeOrderTypes.some((t) => t.toLowerCase() === trimmed.toLowerCase())
+    ) {
+      setOrderTypeFeedback('Já existe um tipo de pedido com este nome.');
+      return;
+    }
+    const updated = activeOrderTypes.map((t) => (t === oldName ? trimmed : t));
+    if (onUpdateOrderTypes) {
+      onUpdateOrderTypes(updated, { oldName, newName: trimmed });
+    }
+    if (orderType === oldName) {
+      setOrderType(trimmed);
+    }
+    setEditingOrderTypeIndex(null);
+    setEditingOrderTypeName('');
+    setOrderTypeFeedback(null);
+  };
+
+  const handleDeleteOrderType = (typeToDelete: string) => {
+    if (activeOrderTypes.length <= 1) {
+      alert('Você precisa ter pelo menos um tipo de pedido cadastrado.');
+      return;
+    }
+    if (confirm(`Tem certeza que deseja remover o tipo de pedido "${typeToDelete}"?`)) {
+      const updated = activeOrderTypes.filter((t) => t !== typeToDelete);
+      if (onUpdateOrderTypes) {
+        onUpdateOrderTypes(updated, undefined, typeToDelete);
+      }
+      if (orderType === typeToDelete) {
+        setOrderType(updated[0] || 'Personalizados Diversos');
+      }
+      setEditingOrderTypeIndex(null);
+      setOrderTypeFeedback(null);
+    }
+  };
 
   // Items
   const [items, setItems] = useState<OrderItem[]>([]);
@@ -661,23 +754,83 @@ export const NovoPedidoView: React.FC<NovoPedidoViewProps> = ({
               </div>
 
               <div>
-                <label className="block text-[11px] font-bold text-slate-500 uppercase tracking-wider mb-2">
-                  TIPO DE PEDIDO
-                </label>
-                <select
-                  value={orderType}
-                  onChange={(e) => setOrderType(e.target.value)}
-                  className="w-full px-4 py-2.5 bg-[#f8f9fa] border border-[#f0e4e8] rounded-xl text-sm text-slate-800 focus:outline-hidden focus:ring-2 focus:ring-[#ac2471]/20 focus:border-[#ac2471] transition-all"
-                >
-                  <option value="Topo de Bolo & Lembrancinhas">Topo de Bolo & Lembrancinhas</option>
-                  <option value="Kit Festa Escolar">Kit Festa Escolar</option>
-                  <option value="Kit Caixas Cenário Luxo">Kit Caixas Cenário Luxo</option>
-                  <option value="Cadernos & Planners Artesanais">Cadernos & Planners Artesanais</option>
-                  <option value="Lembrancinhas Maternidade / Batizado">Lembrancinhas Maternidade / Batizado</option>
-                  <option value="Papelaria Corporativa & Tags">Papelaria Corporativa & Tags</option>
-                  <option value="Convites Interativos">Convites Interativos</option>
-                  <option value="Outro Personalizado">Outro Personalizado</option>
-                </select>
+                <div className="flex items-center justify-between mb-2">
+                  <label className="block text-[11px] font-bold text-slate-500 uppercase tracking-wider">
+                    TIPO DE PEDIDO *
+                  </label>
+                  <div className="flex items-center gap-2">
+                    <button
+                      type="button"
+                      onClick={() => setShowInlineNewOrderType(!showInlineNewOrderType)}
+                      className="text-[11px] font-bold text-[#ac2471] hover:underline flex items-center gap-0.5 cursor-pointer"
+                    >
+                      <Plus className="w-3 h-3" />
+                      <span>{showInlineNewOrderType ? 'Listar Tipos' : 'Novo Tipo'}</span>
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setShowOrderTypeModal(true);
+                        setOrderTypeFeedback(null);
+                      }}
+                      className="text-[11px] font-semibold text-slate-500 hover:text-[#ac2471] flex items-center gap-1 cursor-pointer"
+                      title="Gerenciar lista de tipos de pedido"
+                    >
+                      <Settings className="w-3 h-3" />
+                      <span>Gerenciar</span>
+                    </button>
+                  </div>
+                </div>
+
+                {showInlineNewOrderType ? (
+                  <div className="flex gap-1.5">
+                    <input
+                      type="text"
+                      value={inlineNewOrderTypeName}
+                      onChange={(e) => setInlineNewOrderTypeName(e.target.value)}
+                      placeholder="Digite o novo tipo de pedido..."
+                      className="flex-1 px-4 py-2.5 bg-pink-50/40 border border-pink-200 rounded-xl text-sm text-slate-800 focus:outline-hidden focus:ring-2 focus:ring-[#ac2471]/20"
+                      autoFocus
+                      onKeyDown={(e) => {
+                        if (e.key === 'Enter') {
+                          e.preventDefault();
+                          if (inlineNewOrderTypeName.trim()) {
+                            handleAddOrderType(inlineNewOrderTypeName.trim());
+                            setOrderType(inlineNewOrderTypeName.trim());
+                            setInlineNewOrderTypeName('');
+                            setShowInlineNewOrderType(false);
+                          }
+                        }
+                      }}
+                    />
+                    <button
+                      type="button"
+                      onClick={() => {
+                        if (inlineNewOrderTypeName.trim()) {
+                          handleAddOrderType(inlineNewOrderTypeName.trim());
+                          setOrderType(inlineNewOrderTypeName.trim());
+                          setInlineNewOrderTypeName('');
+                          setShowInlineNewOrderType(false);
+                        }
+                      }}
+                      className="px-4 py-2.5 bg-[#ac2471] text-white text-xs font-bold rounded-xl hover:bg-[#831843] transition-colors cursor-pointer shadow-xs"
+                    >
+                      Adicionar
+                    </button>
+                  </div>
+                ) : (
+                  <select
+                    value={orderType}
+                    onChange={(e) => setOrderType(e.target.value)}
+                    className="w-full px-4 py-2.5 bg-[#f8f9fa] border border-[#f0e4e8] rounded-xl text-sm text-slate-800 focus:outline-hidden focus:ring-2 focus:ring-[#ac2471]/20 focus:border-[#ac2471] transition-all cursor-pointer"
+                  >
+                    {orderTypesList.map((t) => (
+                      <option key={t} value={t}>
+                        {t}
+                      </option>
+                    ))}
+                  </select>
+                )}
               </div>
             </div>
 
@@ -792,39 +945,49 @@ export const NovoPedidoView: React.FC<NovoPedidoViewProps> = ({
                         />
                       </div>
 
-                      {/* Qtd */}
+                      {/* Qtd - Totalmente Editável permitindo apagar e digitar */}
                       <div className="sm:col-span-2">
-                        <label className="block text-[9px] font-bold text-slate-400 uppercase">Qtd</label>
+                        <label className="block text-[9px] font-bold text-slate-400 uppercase text-center mb-1">
+                          Qtd
+                        </label>
                         <input
-                          type="number"
-                          min="1"
-                          value={item.quantity}
-                          onChange={(e) =>
-                            handleUpdateItem(idx, 'quantity', Math.max(1, parseInt(e.target.value) || 1))
-                          }
-                          className="w-full px-2 py-1.5 bg-white border border-pink-100 rounded-lg text-xs font-bold text-slate-800 text-center focus:outline-hidden"
+                          type="text"
+                          inputMode="numeric"
+                          value={item.quantity === 0 ? '' : item.quantity}
+                          onChange={(e) => {
+                            const digits = e.target.value.replace(/\D/g, '');
+                            handleUpdateItem(idx, 'quantity', digits === '' ? 0 : parseInt(digits, 10));
+                          }}
+                          onBlur={() => {
+                            if (!item.quantity || item.quantity < 1) {
+                              handleUpdateItem(idx, 'quantity', 1);
+                            }
+                          }}
+                          placeholder="1"
+                          className="w-full px-2 py-1.5 bg-white border border-pink-200 rounded-lg text-xs font-bold text-slate-800 text-center focus:outline-hidden focus:ring-2 focus:ring-[#ac2471]/20 focus:border-[#ac2471]"
+                          title="Quantidade do produto (totalmente editável)"
                         />
                       </div>
 
-                      {/* Unit Price (Editable with dot, comma and cents) */}
+                      {/* Unit Price (Read-only: editable strictly in Catalog) */}
                       <div className="sm:col-span-2">
-                        <label className="block text-[9px] font-bold text-slate-400 uppercase mb-1">Valor Un.</label>
-                        <DecimalInput
-                          value={item.unitPrice}
-                          onChangeValue={(val) => handleUpdateItem(idx, 'unitPrice', val)}
-                          prefix="R$"
-                          placeholder="0,00"
-                          className="w-full px-2 py-1 bg-white border border-pink-100 rounded-lg text-xs font-bold text-slate-800 text-right focus:outline-hidden focus:border-[#ac2471]"
-                          title="Valor unitário do item (aceita centavos, ponto e vírgula)"
-                        />
+                        <label className="block text-[9px] font-bold text-slate-400 uppercase text-right mb-1">
+                          Valor Un.
+                        </label>
+                        <div
+                          className="w-full px-2.5 py-1.5 bg-pink-50/50 border border-pink-100/80 rounded-lg text-xs font-bold text-slate-700 text-right select-none"
+                          title="Valor unitário definido no Catálogo de Produtos"
+                        >
+                          {formatCurrency(item.unitPrice || 0)}
+                        </div>
                       </div>
 
                       {/* Subtotal & Delete */}
                       <div className="sm:col-span-2 flex items-center justify-between sm:justify-end gap-3">
                         <div className="text-right">
-                          <span className="block text-[9px] font-bold text-slate-400 uppercase">Total</span>
+                          <span className="block text-[9px] font-bold text-slate-400 uppercase">Subtotal</span>
                           <span className="text-xs font-bold text-[#ac2471]">
-                            {formatCurrency(item.quantity * item.unitPrice)}
+                            {formatCurrency((item.quantity || 0) * (item.unitPrice || 0))}
                           </span>
                         </div>
                         <button
@@ -1185,6 +1348,188 @@ export const NovoPedidoView: React.FC<NovoPedidoViewProps> = ({
           </div>
         </div>
       </div>
+
+      {/* ================= MODAL: Gerenciar Tipos de Pedido ================= */}
+      {showOrderTypeModal && (
+        <div className="fixed inset-0 bg-black/60 backdrop-blur-xs z-50 flex items-center justify-center p-4">
+          <div className="bg-white rounded-3xl max-w-lg w-full shadow-2xl border border-pink-100 overflow-hidden animate-in fade-in zoom-in-95 duration-200">
+            {/* Header */}
+            <div className="p-6 bg-gradient-to-r from-pink-50 via-rose-50 to-pink-50 border-b border-pink-100 flex items-center justify-between">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-2xl bg-[#ac2471] text-white flex items-center justify-center shadow-md">
+                  <Tags className="w-5 h-5" />
+                </div>
+                <div>
+                  <h3 className="font-heading font-bold text-slate-800 text-lg">
+                    Tipos de Pedido
+                  </h3>
+                  <p className="text-xs text-slate-500">
+                    Adicione, renomeie ou remova os tipos de encomenda do seu ateliê.
+                  </p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => {
+                  setShowOrderTypeModal(false);
+                  setEditingOrderTypeIndex(null);
+                  setOrderTypeFeedback(null);
+                }}
+                className="p-2 text-slate-400 hover:text-slate-700 hover:bg-white rounded-xl transition-colors cursor-pointer"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            {/* Content */}
+            <div className="p-6 space-y-5 max-h-[70vh] overflow-y-auto">
+              {/* Add New Type Input */}
+              <div className="space-y-2">
+                <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider">
+                  Adicionar Novo Tipo de Pedido
+                </label>
+                <div className="flex gap-2">
+                  <input
+                    type="text"
+                    value={newOrderTypeInput}
+                    onChange={(e) => {
+                      setNewOrderTypeInput(e.target.value);
+                      if (orderTypeFeedback) setOrderTypeFeedback(null);
+                    }}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter') {
+                        e.preventDefault();
+                        if (newOrderTypeInput.trim()) {
+                          handleAddOrderType(newOrderTypeInput.trim());
+                        }
+                      }
+                    }}
+                    placeholder="Ex: Sacolas Personalizadas, Caixas Milk..."
+                    className="flex-1 px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs font-medium text-slate-800 focus:outline-hidden focus:ring-2 focus:ring-[#ac2471]/20 focus:border-[#ac2471]"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => {
+                      if (newOrderTypeInput.trim()) {
+                        handleAddOrderType(newOrderTypeInput.trim());
+                      }
+                    }}
+                    disabled={!newOrderTypeInput.trim()}
+                    className="px-4 py-2.5 bg-[#ac2471] text-white text-xs font-bold rounded-xl hover:bg-[#831843] transition-colors disabled:opacity-50 cursor-pointer flex items-center gap-1.5 shadow-xs"
+                  >
+                    <Plus className="w-4 h-4" />
+                    <span>Adicionar</span>
+                  </button>
+                </div>
+                {orderTypeFeedback && (
+                  <p className="text-xs text-rose-500 font-medium">{orderTypeFeedback}</p>
+                )}
+              </div>
+
+              {/* List of Types */}
+              <div className="space-y-2 pt-3 border-t border-slate-100">
+                <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider">
+                  Tipos Cadastrados ({activeOrderTypes.length})
+                </label>
+                <div className="divide-y divide-slate-100 border border-slate-100 rounded-2xl overflow-hidden bg-[#faf7f8]">
+                  {activeOrderTypes.map((t, idx) => (
+                    <div
+                      key={idx}
+                      className="p-3 flex items-center justify-between gap-3 hover:bg-white transition-colors"
+                    >
+                      {editingOrderTypeIndex === idx ? (
+                        <div className="flex-1 flex items-center gap-2">
+                          <input
+                            type="text"
+                            value={editingOrderTypeName}
+                            onChange={(e) => setEditingOrderTypeName(e.target.value)}
+                            className="flex-1 px-3 py-1.5 bg-white border border-[#ac2471] rounded-lg text-xs font-semibold text-slate-800 focus:outline-hidden"
+                            autoFocus
+                            onKeyDown={(e) => {
+                              if (e.key === 'Enter') {
+                                e.preventDefault();
+                                handleRenameOrderType(t, editingOrderTypeName);
+                              } else if (e.key === 'Escape') {
+                                setEditingOrderTypeIndex(null);
+                              }
+                            }}
+                          />
+                          <button
+                            type="button"
+                            onClick={() => handleRenameOrderType(t, editingOrderTypeName)}
+                            className="p-1.5 bg-emerald-500 text-white rounded-lg hover:bg-emerald-600 transition-colors cursor-pointer"
+                            title="Salvar"
+                          >
+                            <Check className="w-3.5 h-3.5" />
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => setEditingOrderTypeIndex(null)}
+                            className="p-1.5 bg-slate-200 text-slate-600 rounded-lg hover:bg-slate-300 transition-colors cursor-pointer"
+                            title="Cancelar"
+                          >
+                            <X className="w-3.5 h-3.5" />
+                          </button>
+                        </div>
+                      ) : (
+                        <>
+                          <div className="flex items-center gap-2 min-w-0">
+                            <span className="w-2 h-2 rounded-full bg-pink-400 flex-shrink-0" />
+                            <span className="text-xs font-semibold text-slate-700 truncate">
+                              {t}
+                            </span>
+                            {orderType === t && (
+                              <span className="text-[10px] font-bold px-2 py-0.5 bg-pink-100 text-[#ac2471] rounded-full">
+                                Selecionado
+                              </span>
+                            )}
+                          </div>
+                          <div className="flex items-center gap-1">
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setEditingOrderTypeIndex(idx);
+                                setEditingOrderTypeName(t);
+                              }}
+                              className="p-1.5 text-slate-400 hover:text-slate-700 hover:bg-pink-50 rounded-lg transition-colors cursor-pointer"
+                              title="Renomear tipo de pedido"
+                            >
+                              <Pencil className="w-3.5 h-3.5" />
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => handleDeleteOrderType(t)}
+                              className="p-1.5 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded-lg transition-colors cursor-pointer"
+                              title="Excluir tipo de pedido"
+                            >
+                              <Trash2 className="w-3.5 h-3.5" />
+                            </button>
+                          </div>
+                        </>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              </div>
+            </div>
+
+            {/* Footer */}
+            <div className="p-4 bg-slate-50 border-t border-slate-100 flex justify-end">
+              <button
+                type="button"
+                onClick={() => {
+                  setShowOrderTypeModal(false);
+                  setEditingOrderTypeIndex(null);
+                  setOrderTypeFeedback(null);
+                }}
+                className="px-5 py-2.5 bg-[#ac2471] text-white text-xs font-bold rounded-xl hover:bg-[#831843] transition-colors cursor-pointer shadow-xs"
+              >
+                Concluir
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* ================= MODAL: Visualizador de Imagem em Tela Cheia ================= */}
       {selectedPreviewImage && (

@@ -86,18 +86,23 @@ export const NovoPedidoView: React.FC<NovoPedidoViewProps> = ({
   const [customTotal, setCustomTotal] = useState<number | null>(null);
   const [deposit, setDeposit] = useState<number>(0);
 
-  // Populate from initialData (e.g. from Quote conversion)
+  // Populate from initialData (e.g. from Order Edit or Quote conversion)
   useEffect(() => {
     if (initialData) {
       if (initialData.clientName) setClientName(initialData.clientName);
       if (initialData.clientPhone) setClientPhone(initialData.clientPhone);
       if (initialData.clientInstagram) setClientInstagram(initialData.clientInstagram);
+      if (initialData.orderDate) setOrderDate(initialData.orderDate);
+      if (initialData.deliveryDate) setDeliveryDate(initialData.deliveryDate);
       if (initialData.theme) setTheme(initialData.theme);
       if (initialData.origin) setOrigin(initialData.origin);
       if (initialData.orderType) setOrderType(initialData.orderType);
       if (initialData.items && initialData.items.length > 0) setItems(initialData.items);
       if (initialData.deliveryMethod) setDeliveryMethod(initialData.deliveryMethod);
       if (initialData.deliveryAddress) setDeliveryAddress(initialData.deliveryAddress);
+      if (initialData.mockupImages && initialData.mockupImages.length > 0) {
+        setMockupImages(initialData.mockupImages);
+      }
       if (initialData.financial) {
         if (initialData.financial.paymentMethod) setPaymentMethod(initialData.financial.paymentMethod);
         if (initialData.financial.total !== undefined) setCustomTotal(initialData.financial.total);
@@ -213,6 +218,9 @@ export const NovoPedidoView: React.FC<NovoPedidoViewProps> = ({
   // Days remaining calculation
   const daysInfo = getDaysRemaining(deliveryDate);
 
+  // Check if we are editing an existing order
+  const isEditing = Boolean(initialData && initialData.id);
+
   // Submit
   const handleSubmit = (isDraft = false) => {
     if (!isDraft && !clientName.trim()) {
@@ -220,9 +228,9 @@ export const NovoPedidoView: React.FC<NovoPedidoViewProps> = ({
       return;
     }
 
-    const newOrder: Order = {
-      id: `ped-${Date.now()}`,
-      code: `#PED-${Math.floor(1000 + Math.random() * 9000)}`,
+    const orderToSave: Order = {
+      id: (initialData && initialData.id) ? initialData.id : `ped-${Date.now()}`,
+      code: (initialData && initialData.code) ? initialData.code : `#PED-${Math.floor(1000 + Math.random() * 9000)}`,
       clientName: clientName.trim() || 'Cliente sem nome',
       clientPhone: clientPhone.trim() || '(11) 90000-0000',
       clientInstagram: clientInstagram.trim(),
@@ -255,43 +263,55 @@ export const NovoPedidoView: React.FC<NovoPedidoViewProps> = ({
         remaining: remainingAmount,
         paymentProgress,
       },
-      status: isDraft ? 'Rascunho' : (deposit >= totalAmount ? 'Arte Aprovada' : 'Pendente'),
+      status: isDraft
+        ? 'Rascunho'
+        : (initialData && initialData.status ? initialData.status : (deposit >= totalAmount ? 'Arte Aprovada' : 'Pendente')),
       mockupImages,
-      createdAt: new Date().toISOString(),
+      createdAt: (initialData && initialData.createdAt) ? initialData.createdAt : new Date().toISOString(),
+      completedAt: initialData?.completedAt,
       updatedAt: new Date().toISOString(),
     };
 
     if (!isDraft) {
       triggerConfetti();
     }
-    onSaveOrder(newOrder, isDraft);
+    onSaveOrder(orderToSave, isDraft);
   };
 
   const currentInspiration = INSPIRATIONS[inspirationIndex % INSPIRATIONS.length];
 
   return (
     <div className="max-w-[1440px] mx-auto p-4 sm:p-8 space-y-8 animate-in fade-in duration-300">
-      {/* Top Header matching Image 10.jpeg */}
+      {/* Top Header */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-2">
         <div>
-          <h1 className="text-2xl sm:text-3xl font-heading font-extrabold text-slate-900 tracking-tight">
-            Novo Pedido
+          <h1 className="text-2xl sm:text-3xl font-heading font-extrabold text-slate-900 tracking-tight flex items-center gap-3">
+            <span>{isEditing ? `Editar Pedido ${initialData?.code || ''}` : 'Novo Pedido'}</span>
+            {isEditing && (
+              <span className="text-xs px-3 py-1 rounded-full bg-amber-100 text-amber-800 font-bold">
+                Modo de Edição
+              </span>
+            )}
           </h1>
           <p className="text-sm text-slate-500 mt-1">
-            Preencha os detalhes abaixo para cadastrar uma nova encomenda no ateliê.
+            {isEditing
+              ? `Alterando os dados da encomenda de ${clientName || 'Cliente'}. Salve para atualizar.`
+              : 'Preencha os detalhes abaixo para cadastrar uma nova encomenda no ateliê.'}
           </p>
         </div>
 
         {/* Action Buttons in Header */}
         <div className="flex items-center gap-3">
-          <button
-            id="btn-salvar-rascunho"
-            onClick={() => handleSubmit(true)}
-            className="flex items-center gap-2 px-5 py-2.5 rounded-2xl bg-[#ffd1dc]/50 hover:bg-[#ffd1dc] text-[#ac2471] font-semibold text-xs sm:text-sm transition-all duration-200 shadow-xs cursor-pointer"
-          >
-            <Save className="w-4 h-4" />
-            <span>Salvar Rascunho</span>
-          </button>
+          {!isEditing && (
+            <button
+              id="btn-salvar-rascunho"
+              onClick={() => handleSubmit(true)}
+              className="flex items-center gap-2 px-5 py-2.5 rounded-2xl bg-[#ffd1dc]/50 hover:bg-[#ffd1dc] text-[#ac2471] font-semibold text-xs sm:text-sm transition-all duration-200 shadow-xs cursor-pointer"
+            >
+              <Save className="w-4 h-4" />
+              <span>Salvar Rascunho</span>
+            </button>
+          )}
 
           <button
             id="btn-finalizar-cadastro"
@@ -299,12 +319,12 @@ export const NovoPedidoView: React.FC<NovoPedidoViewProps> = ({
             className="flex items-center gap-2 px-6 py-2.5 rounded-2xl bg-gradient-to-r from-[#9d174d] to-[#be185d] hover:from-[#831843] hover:to-[#9d174d] text-white font-semibold text-xs sm:text-sm shadow-md hover:shadow-lg transition-all duration-200 cursor-pointer"
           >
             <Check className="w-4 h-4" />
-            <span>Finalizar Cadastro</span>
+            <span>{isEditing ? 'Salvar Alterações' : 'Finalizar Cadastro'}</span>
           </button>
         </div>
       </div>
 
-      {/* Quote conversion info banner */}
+      {/* Info banner for Edit mode or Quote conversion */}
       {initialData && (
         <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 p-4 bg-gradient-to-r from-pink-50 via-[#fdf2f6] to-pink-50 border border-pink-200 rounded-3xl text-xs text-[#ac2471] font-semibold shadow-xs animate-in fade-in">
           <div className="flex items-center gap-2.5">
@@ -313,10 +333,14 @@ export const NovoPedidoView: React.FC<NovoPedidoViewProps> = ({
             </div>
             <div>
               <p className="font-bold text-slate-800">
-                Informações carregadas a partir do Orçamento!
+                {isEditing
+                  ? `Editando Pedido ${initialData.code} (${initialData.theme || 'Personalizado'})`
+                  : 'Informações carregadas a partir do Orçamento!'}
               </p>
               <p className="text-[11px] text-pink-700/80 font-normal">
-                Cliente, tema, itens e valores foram preenchidos automaticamente. Revise a data de entrega, adicione fotos se desejar e finalize o cadastro.
+                {isEditing
+                  ? 'Você pode alterar produtos, quantidades, datas, dados de entrega e valores. Clique em "Salvar Alterações" quando terminar.'
+                  : 'Cliente, tema, itens e valores foram preenchidos automaticamente. Revise a data de entrega e finalize o cadastro.'}
               </p>
             </div>
           </div>
@@ -325,7 +349,7 @@ export const NovoPedidoView: React.FC<NovoPedidoViewProps> = ({
               onClick={onClearInitialData}
               className="text-[11px] font-bold text-slate-500 hover:text-slate-800 underline px-2 py-1 cursor-pointer"
             >
-              Limpar preenchimento
+              {isEditing ? 'Cancelar Edição' : 'Limpar preenchimento'}
             </button>
           )}
         </div>

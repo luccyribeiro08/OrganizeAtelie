@@ -484,10 +484,13 @@ export default function App() {
     }
   };
 
-  // Handler: Save New Order
-  const handleSaveOrder = (newOrder: Order) => {
+  // Handler: Save New or Edited Order
+  const handleSaveOrder = (savedOrder: Order) => {
     setOrders((prev) => {
-      const updated = [newOrder, ...prev];
+      const exists = prev.some((o) => o.id === savedOrder.id);
+      const updated = exists
+        ? prev.map((o) => (o.id === savedOrder.id ? savedOrder : o))
+        : [savedOrder, ...prev];
       if (currentUser) {
         try {
           localStorage.setItem(`atelie_orders_${currentUser.id}`, JSON.stringify(updated));
@@ -499,22 +502,22 @@ export default function App() {
     });
 
     // Auto-register client if not already in clients list
-    if (newOrder.clientName && newOrder.clientName.trim() !== 'Cliente sem nome') {
-      const clientCleanPhone = (newOrder.clientPhone || '').replace(/\D/g, '');
+    if (savedOrder.clientName && savedOrder.clientName.trim() !== 'Cliente sem nome') {
+      const clientCleanPhone = (savedOrder.clientPhone || '').replace(/\D/g, '');
       const existingClient = clients.find(
         (c) =>
-          c.name.trim().toLowerCase() === newOrder.clientName.trim().toLowerCase() ||
+          c.name.trim().toLowerCase() === savedOrder.clientName.trim().toLowerCase() ||
           (clientCleanPhone && c.phone.replace(/\D/g, '') === clientCleanPhone)
       );
 
       if (!existingClient) {
         const autoClient: Client = {
           id: `cli-${Date.now()}`,
-          name: newOrder.clientName.trim(),
-          phone: newOrder.clientPhone || '',
-          instagram: newOrder.clientInstagram,
-          address: newOrder.deliveryAddress,
-          notes: newOrder.personalization?.specialNotes,
+          name: savedOrder.clientName.trim(),
+          phone: savedOrder.clientPhone || '',
+          instagram: savedOrder.clientInstagram,
+          address: savedOrder.deliveryAddress,
+          notes: savedOrder.personalization?.specialNotes,
           createdAt: new Date().toISOString(),
           updatedAt: new Date().toISOString(),
         };
@@ -536,9 +539,20 @@ export default function App() {
 
     setOrderDraftToCreate(null);
     if (currentUser && currentUser.id !== 'user-luccy-default') {
-      supabaseService.saveOrder(currentUser.id, newOrder);
+      supabaseService.saveOrder(currentUser.id, savedOrder);
     }
     setActiveTab('pedidos');
+  };
+
+  // Handler: Start Editing an Order (only for non-finalized orders)
+  const handleEditOrder = (orderToEdit: Order) => {
+    if (orderToEdit.status === 'Finalizado') {
+      alert('Pedidos já finalizados não podem ser alterados.');
+      return;
+    }
+    setSelectedOrder(null);
+    setOrderDraftToCreate(orderToEdit);
+    setActiveTab('criar-pedido');
   };
 
   // Handler: Update Order Status (Immediate persistence to local & cloud)
@@ -1008,6 +1022,7 @@ export default function App() {
               orders={orders}
               profile={profile}
               onSelectOrder={(ord) => setSelectedOrder(ord)}
+              onEditOrder={handleEditOrder}
               onPrintOrder={(ord) => setOrderToPrint(ord)}
               onUpdateStatus={handleUpdateStatus}
               onDeleteOrder={handleDeleteOrder}
@@ -1073,6 +1088,7 @@ export default function App() {
           order={selectedOrder}
           profile={profile}
           onClose={() => setSelectedOrder(null)}
+          onEditOrder={handleEditOrder}
           onUpdateStatus={handleUpdateStatus}
           onPrintOrder={(ord) => {
             setSelectedOrder(null);

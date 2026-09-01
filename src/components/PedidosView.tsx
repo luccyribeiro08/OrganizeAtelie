@@ -12,6 +12,7 @@ import {
   Clock,
   Coins,
   DollarSign,
+  Edit3,
   ExternalLink,
   Eye,
   FileText,
@@ -49,6 +50,7 @@ interface PedidosViewProps {
   orders: Order[];
   profile?: AtelieProfile;
   onSelectOrder: (order: Order) => void;
+  onEditOrder?: (order: Order) => void;
   onPrintOrder: (order: Order) => void;
   onUpdateStatus: (orderId: string, status: OrderStatus) => void;
   onDeleteOrder: (orderId: string) => void;
@@ -62,6 +64,7 @@ export const PedidosView: React.FC<PedidosViewProps> = ({
   orders,
   profile,
   onSelectOrder,
+  onEditOrder,
   onPrintOrder,
   onUpdateStatus,
   onDeleteOrder,
@@ -608,6 +611,17 @@ export const PedidosView: React.FC<PedidosViewProps> = ({
                               <Printer className="w-4 h-4" />
                             </button>
 
+                            {/* Edit Order (only for non-finalized orders) */}
+                            {!isFinalized && onEditOrder && (
+                              <button
+                                onClick={() => onEditOrder(order)}
+                                className="p-2 text-slate-500 hover:text-amber-600 hover:bg-amber-50 rounded-xl transition-colors cursor-pointer"
+                                title="Editar Pedido"
+                              >
+                                <Edit3 className="w-4 h-4" />
+                              </button>
+                            )}
+
                             {/* View Details */}
                             <button
                               onClick={() => onSelectOrder(order)}
@@ -722,22 +736,37 @@ export const PedidosView: React.FC<PedidosViewProps> = ({
                             <span className="text-[10px] font-bold text-pink-600">
                               {order.code}
                             </span>
-                            {isOrderFinalized ? (
-                              <span className="text-[9px] font-bold px-2 py-0.5 rounded-full bg-pink-100 text-[#ac2471] flex items-center gap-1">
-                                <Lock className="w-2.5 h-2.5" />
-                                Concluído
-                              </span>
-                            ) : (
-                              <span
-                                className={`text-[9px] font-bold px-2 py-0.5 rounded-full ${
-                                  days.days <= 0
-                                    ? 'bg-rose-100 text-rose-700'
-                                    : 'bg-pink-50 text-slate-600'
-                                }`}
-                              >
-                                {days.text}
-                              </span>
-                            )}
+                            <div className="flex items-center gap-1">
+                              {!isOrderFinalized && onEditOrder && (
+                                <button
+                                  type="button"
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    onEditOrder(order);
+                                  }}
+                                  className="p-1 rounded-md text-slate-400 hover:text-amber-700 hover:bg-amber-50 transition-colors cursor-pointer"
+                                  title="Editar Pedido"
+                                >
+                                  <Edit3 className="w-3 h-3" />
+                                </button>
+                              )}
+                              {isOrderFinalized ? (
+                                <span className="text-[9px] font-bold px-2 py-0.5 rounded-full bg-pink-100 text-[#ac2471] flex items-center gap-1">
+                                  <Lock className="w-2.5 h-2.5" />
+                                  Concluído
+                                </span>
+                              ) : (
+                                <span
+                                  className={`text-[9px] font-bold px-2 py-0.5 rounded-full ${
+                                    days.days <= 0
+                                      ? 'bg-rose-100 text-rose-700'
+                                      : 'bg-pink-50 text-slate-600'
+                                  }`}
+                                >
+                                  {days.text}
+                                </span>
+                              )}
+                            </div>
                           </div>
 
                           <div>

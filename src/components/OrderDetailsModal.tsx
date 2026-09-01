@@ -5,6 +5,7 @@ import {
   Clock,
   Copy,
   CreditCard,
+  Edit3,
   Eye,
   Gift,
   Lock,
@@ -30,6 +31,7 @@ interface OrderDetailsModalProps {
   order: Order | null;
   profile: AtelieProfile;
   onClose: () => void;
+  onEditOrder?: (order: Order) => void;
   onUpdateStatus: (orderId: string, status: OrderStatus) => void;
   onPrintOrder: (order: Order) => void;
   onNotifyInProduction?: (order: Order) => void;
@@ -41,6 +43,7 @@ export const OrderDetailsModal: React.FC<OrderDetailsModalProps> = ({
   order,
   profile,
   onClose,
+  onEditOrder,
   onUpdateStatus,
   onPrintOrder,
   onNotifyInProduction,
@@ -99,12 +102,28 @@ export const OrderDetailsModal: React.FC<OrderDetailsModalProps> = ({
             </p>
           </div>
 
-          <button
-            onClick={onClose}
-            className="p-2 text-slate-400 hover:text-slate-700 rounded-xl hover:bg-pink-50"
-          >
-            <X className="w-5 h-5" />
-          </button>
+          <div className="flex items-center gap-2">
+            {order.status !== 'Finalizado' && onEditOrder && (
+              <button
+                onClick={() => {
+                  onEditOrder(order);
+                  onClose();
+                }}
+                className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-amber-50 hover:bg-amber-100 text-amber-800 text-xs font-bold transition-all border border-amber-200 shadow-2xs cursor-pointer"
+                title="Editar dados desta encomenda"
+              >
+                <Edit3 className="w-3.5 h-3.5 text-amber-600" />
+                <span>Editar Pedido</span>
+              </button>
+            )}
+
+            <button
+              onClick={onClose}
+              className="p-2 text-slate-400 hover:text-slate-700 rounded-xl hover:bg-pink-50"
+            >
+              <X className="w-5 h-5" />
+            </button>
+          </div>
         </div>
 
         {/* Status Workflow Bar */}
@@ -411,6 +430,21 @@ export const OrderDetailsModal: React.FC<OrderDetailsModalProps> = ({
           </div>
 
           <div className="flex items-center gap-2">
+            {order.status !== 'Finalizado' && onEditOrder && (
+              <button
+                type="button"
+                onClick={() => {
+                  onEditOrder(order);
+                  onClose();
+                }}
+                className="flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-amber-500 hover:bg-amber-600 text-white text-xs font-bold transition-all shadow-xs active:scale-95 cursor-pointer"
+                title="Editar itens, valores ou dados do pedido"
+              >
+                <Edit3 className="w-4 h-4" />
+                <span>Editar Pedido</span>
+              </button>
+            )}
+
             <button
               onClick={() => onPrintOrder(order)}
               className="flex items-center gap-1.5 px-4 py-2 rounded-xl bg-[#ac2471] text-white text-xs font-semibold hover:bg-[#831843] transition-colors"

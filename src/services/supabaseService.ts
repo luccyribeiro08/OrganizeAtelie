@@ -1,5 +1,5 @@
 import { supabase } from '../lib/supabaseClient';
-import { AtelieProfile, CatalogItem, Order, Quotation } from '../types';
+import { AtelieProfile, CatalogItem, Client, Order, Quotation } from '../types';
 
 export const supabaseService = {
   // --- PROFILES ---
@@ -260,6 +260,77 @@ export const supabaseService = {
       return !error;
     } catch (e) {
       console.error('Error deleting quotation from Supabase', e);
+      return false;
+    }
+  },
+
+  // --- CLIENTS ---
+  async getClients(userId: string): Promise<Client[]> {
+    try {
+      const { data, error } = await supabase
+        .from('clients')
+        .select('*')
+        .eq('user_id', userId)
+        .order('name', { ascending: true });
+
+      if (error || !data) return [];
+      return data.map((c: any) => ({
+        id: c.id,
+        name: c.name,
+        phone: c.phone || '',
+        instagram: c.instagram || '',
+        email: c.email || '',
+        cpf: c.cpf || '',
+        address: c.address || '',
+        city: c.city || '',
+        state: c.state || '',
+        zipCode: c.zip_code || '',
+        birthDate: c.birth_date || '',
+        childName: c.child_name || '',
+        childBirthDate: c.child_birth_date || '',
+        notes: c.notes || '',
+        createdAt: c.created_at,
+        updatedAt: c.updated_at,
+      }));
+    } catch (e) {
+      console.error('Error fetching clients from Supabase', e);
+      return [];
+    }
+  },
+
+  async saveClient(userId: string, client: Client): Promise<boolean> {
+    try {
+      const { error } = await supabase.from('clients').upsert({
+        id: client.id,
+        user_id: userId,
+        name: client.name,
+        phone: client.phone,
+        instagram: client.instagram,
+        email: client.email,
+        cpf: client.cpf,
+        address: client.address,
+        city: client.city,
+        state: client.state,
+        zip_code: client.zipCode,
+        birth_date: client.birthDate || null,
+        child_name: client.childName,
+        child_birth_date: client.childBirthDate || null,
+        notes: client.notes,
+        updated_at: new Date().toISOString(),
+      });
+      return !error;
+    } catch (e) {
+      console.error('Error saving client to Supabase', e);
+      return false;
+    }
+  },
+
+  async deleteClient(clientId: string): Promise<boolean> {
+    try {
+      const { error } = await supabase.from('clients').delete().eq('id', clientId);
+      return !error;
+    } catch (e) {
+      console.error('Error deleting client from Supabase', e);
       return false;
     }
   },

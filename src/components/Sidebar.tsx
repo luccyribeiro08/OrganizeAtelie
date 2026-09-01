@@ -8,17 +8,19 @@ import {
   Settings,
   ShoppingBag,
   Sparkles,
+  Users,
   X
 } from 'lucide-react';
 import { BrandLogo } from './BrandLogo';
-
-export type ActiveTab = 'pedidos' | 'criar-pedido' | 'catalogo' | 'orcamento' | 'agenda' | 'configuracoes';
+import { ActiveTab } from '../types';
+export type { ActiveTab };
 
 interface SidebarProps {
   activeTab: ActiveTab;
   setActiveTab: (tab: ActiveTab) => void;
   ordersCount: number;
   urgentCount: number;
+  clientsCount?: number;
   isOpenMobile: boolean;
   setIsOpenMobile: (open: boolean) => void;
   logoUrl?: string;
@@ -31,6 +33,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
   setActiveTab,
   ordersCount,
   urgentCount,
+  clientsCount,
   isOpenMobile,
   setIsOpenMobile,
   logoUrl,
@@ -49,6 +52,12 @@ export const Sidebar: React.FC<SidebarProps> = ({
       label: 'Criar Pedido',
       icon: PlusCircle,
       highlight: true,
+    },
+    {
+      id: 'clientes' as ActiveTab,
+      label: 'Clientes',
+      icon: Users,
+      badge: clientsCount && clientsCount > 0 ? clientsCount : undefined,
     },
     {
       id: 'catalogo' as ActiveTab,

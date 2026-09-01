@@ -1,8 +1,9 @@
 import React, { useEffect, useState } from 'react';
-import { Sidebar, ActiveTab } from './components/Sidebar';
+import { Sidebar } from './components/Sidebar';
 import { Header } from './components/Header';
 import { NovoPedidoView } from './components/NovoPedidoView';
 import { PedidosView } from './components/PedidosView';
+import { ClientesView } from './components/ClientesView';
 import { CatalogoView } from './components/CatalogoView';
 import { OrcamentoView } from './components/OrcamentoView';
 import { AgendaView } from './components/AgendaView';
@@ -10,10 +11,11 @@ import { ConfiguracoesView } from './components/ConfiguracoesView';
 import { OrderDetailsModal } from './components/OrderDetailsModal';
 import { OrderReceiptModal } from './components/OrderReceiptModal';
 import { AuthView } from './components/AuthView';
-import { AtelieProfile, CatalogItem, Order, OrderStatus, Quotation, UserAccount } from './types';
+import { ActiveTab, AtelieProfile, CatalogItem, Client, Order, OrderStatus, Quotation, UserAccount } from './types';
 import {
   INITIAL_ATELIE_PROFILE,
   INITIAL_CATALOG,
+  INITIAL_CLIENTS,
   INITIAL_ORDERS,
   INITIAL_QUOTATIONS
 } from './data/initialData';
@@ -41,7 +43,7 @@ export default function App() {
       const savedTab = localStorage.getItem('atelie_active_tab_v2');
       if (
         savedTab &&
-        ['pedidos', 'criar-pedido', 'catalogo', 'orcamento', 'agenda', 'configuracoes'].includes(savedTab)
+        ['pedidos', 'criar-pedido', 'clientes', 'catalogo', 'orcamento', 'agenda', 'configuracoes'].includes(savedTab)
       ) {
         return savedTab as ActiveTab;
       }
@@ -211,6 +213,18 @@ export default function App() {
     return [];
   };
 
+  // Helper to load user clients
+  const loadUserClients = (user: UserAccount): Client[] => {
+    try {
+      const saved = localStorage.getItem(`atelie_clients_${user.id}`);
+      if (saved) return JSON.parse(saved);
+    } catch (e) {
+      console.error(e);
+    }
+    if (user.id === 'user-luccy-default') return INITIAL_CLIENTS;
+    return [];
+  };
+
   // User-isolated persistent states
   const [profile, setProfile] = useState<AtelieProfile>(() =>
     currentUser ? loadUserProfile(currentUser) : INITIAL_ATELIE_PROFILE
@@ -228,7 +242,11 @@ export default function App() {
     currentUser ? loadUserQuotations(currentUser) : []
   );
 
-  // Draft data when approving a quote to create order
+  const [clients, setClients] = useState<Client[]>(() =>
+    currentUser ? loadUserClients(currentUser) : []
+  );
+
+  // Draft data when approving a quote or selecting a client to create order
   const [orderDraftToCreate, setOrderDraftToCreate] = useState<Partial<Order> | null>(null);
 
   // Modals
@@ -244,7 +262,7 @@ export default function App() {
     }
   }, [registeredUsers]);
 
-  // When currentUser changes, reload their profile, orders, and catalog
+  // When currentUser changes, reload their profile, orders, catalog, quotations, clients
   useEffect(() => {
     if (currentUser) {
       try {
@@ -260,6 +278,7 @@ export default function App() {
       setOrders(loadUserOrders(currentUser));
       setCatalog(loadUserCatalog(currentUser));
       setQuotations(loadUserQuotations(currentUser));
+      setClients(loadUserClients(currentUser));
 
       // Asynchronously fetch and sync with Supabase for real accounts
       if (currentUser.id !== 'user-luccy-default') {
@@ -287,6 +306,14 @@ export default function App() {
             setQuotations(remoteQuotes);
             try {
               localStorage.setItem(`atelie_quotations_${currentUser.id}`, JSON.stringify(remoteQuotes));
+            } catch (e) {}
+          }
+        });
+        supabaseService.getClients(currentUser.id).then((remoteClients) => {
+          if (remoteClients && remoteClients.length > 0) {
+            setClients(remoteClients);
+            try {
+              localStorage.setItem(`atelie_clients_${currentUser.id}`, JSON.stringify(remoteClients));
             } catch (e) {}
           }
         });
@@ -323,6 +350,16 @@ export default function App() {
       console.error('Error saving user quotations', e);
     }
   }, [quotations, currentUser?.id]);
+
+  // Save Clients for current user
+  useEffect(() => {
+    if (!currentUser) return;
+    try {
+      localStorage.setItem(`atelie_clients_${currentUser.id}`, JSON.stringify(clients));
+    } catch (e) {
+      console.error('Error saving user clients', e);
+    }
+  }, [clients, currentUser?.id]);
 
   // Save Profile for current user & sync with user account
   useEffect(() => {
@@ -442,7 +479,6 @@ export default function App() {
   };
 
   // Handler: Save New Order
-  // Handler: Save New Order
   const handleSaveOrder = (newOrder: Order) => {
     setOrders((prev) => {
       const updated = [newOrder, ...prev];
@@ -455,6 +491,43 @@ export default function App() {
       }
       return updated;
     });
+
+    // Auto-register client if not already in clients list
+    if (newOrder.clientName && newOrder.clientName.trim() !== 'Cliente sem nome') {
+      const clientCleanPhone = (newOrder.clientPhone || '').replace(/\D/g, '');
+      const existingClient = clients.find(
+        (c) =>
+          c.name.trim().toLowerCase() === newOrder.clientName.trim().toLowerCase() ||
+          (clientCleanPhone && c.phone.replace(/\D/g, '') === clientCleanPhone)
+      );
+
+      if (!existingClient) {
+        const autoClient: Client = {
+          id: `cli-${Date.now()}`,
+          name: newOrder.clientName.trim(),
+          phone: newOrder.clientPhone || '',
+          instagram: newOrder.clientInstagram,
+          address: newOrder.deliveryAddress,
+          notes: newOrder.personalization?.specialNotes,
+          createdAt: new Date().toISOString(),
+          updatedAt: new Date().toISOString(),
+        };
+
+        setClients((prev) => {
+          const updatedClients = [autoClient, ...prev];
+          if (currentUser) {
+            try {
+              localStorage.setItem(`atelie_clients_${currentUser.id}`, JSON.stringify(updatedClients));
+            } catch (e) {}
+            if (currentUser.id !== 'user-luccy-default') {
+              supabaseService.saveClient(currentUser.id, autoClient);
+            }
+          }
+          return updatedClients;
+        });
+      }
+    }
+
     setOrderDraftToCreate(null);
     if (currentUser && currentUser.id !== 'user-luccy-default') {
       supabaseService.saveOrder(currentUser.id, newOrder);
@@ -557,6 +630,85 @@ export default function App() {
     if (currentUser && currentUser.id !== 'user-luccy-default') {
       supabaseService.deleteOrder(orderId);
     }
+  };
+
+  // --- CLIENT HANDLERS ---
+  const handleAddClient = (newClient: Client) => {
+    setClients((prev) => {
+      const updated = [newClient, ...prev];
+      if (currentUser) {
+        try {
+          localStorage.setItem(`atelie_clients_${currentUser.id}`, JSON.stringify(updated));
+        } catch (e) {
+          console.error(e);
+        }
+      }
+      return updated;
+    });
+    if (currentUser && currentUser.id !== 'user-luccy-default') {
+      supabaseService.saveClient(currentUser.id, newClient);
+    }
+  };
+
+  const handleUpdateClient = (client: Client) => {
+    setClients((prev) => {
+      const updated = prev.map((c) => (c.id === client.id ? client : c));
+      if (currentUser) {
+        try {
+          localStorage.setItem(`atelie_clients_${currentUser.id}`, JSON.stringify(updated));
+        } catch (e) {
+          console.error(e);
+        }
+      }
+      return updated;
+    });
+    if (currentUser && currentUser.id !== 'user-luccy-default') {
+      supabaseService.saveClient(currentUser.id, client);
+    }
+  };
+
+  const handleDeleteClient = (clientId: string) => {
+    setClients((prev) => {
+      const updated = prev.filter((c) => c.id !== clientId);
+      if (currentUser) {
+        try {
+          localStorage.setItem(`atelie_clients_${currentUser.id}`, JSON.stringify(updated));
+        } catch (e) {
+          console.error(e);
+        }
+      }
+      return updated;
+    });
+    if (currentUser && currentUser.id !== 'user-luccy-default') {
+      supabaseService.deleteClient(clientId);
+    }
+  };
+
+  const handleSelectClientForOrder = (client: Client) => {
+    const fullAddress = [
+      client.address,
+      client.city ? `${client.city}/${client.state || 'SP'}` : '',
+      client.zipCode ? `CEP: ${client.zipCode}` : '',
+    ]
+      .filter(Boolean)
+      .join(' - ');
+
+    const partialOrder: Partial<Order> = {
+      clientName: client.name,
+      clientPhone: client.phone,
+      clientInstagram: client.instagram,
+      deliveryAddress: fullAddress || undefined,
+      personalization: client.childName
+        ? {
+            honoreeName: client.childName,
+            specialNotes: client.notes ? `Preferências da cliente: ${client.notes}` : undefined,
+          }
+        : client.notes
+        ? { specialNotes: `Preferências da cliente: ${client.notes}` }
+        : undefined,
+    };
+    setOrderDraftToCreate(partialOrder);
+    setActiveTab('criar-pedido');
   };
 
   // Handler: Add Catalog Item
@@ -683,13 +835,14 @@ export default function App() {
   // Backup handlers
   const handleExportData = () => {
     const backupData = {
-      version: '2.0',
+      version: '2.1',
       user: currentUser?.email,
       exportedAt: new Date().toISOString(),
       profile,
       catalog,
       orders,
       quotations,
+      clients,
     };
     const blob = new Blob([JSON.stringify(backupData, null, 2)], {
       type: 'application/json',
@@ -742,6 +895,17 @@ export default function App() {
             }
           }
         }
+        if (parsed.clients && Array.isArray(parsed.clients)) {
+          setClients(parsed.clients);
+          if (currentUser) {
+            try {
+              localStorage.setItem(`atelie_clients_${currentUser.id}`, JSON.stringify(parsed.clients));
+            } catch (e) {}
+            if (currentUser.id !== 'user-luccy-default') {
+              parsed.clients.forEach((c: Client) => supabaseService.saveClient(currentUser.id, c));
+            }
+          }
+        }
         if (parsed.profile) {
           handleUpdateProfile(parsed.profile);
         }
@@ -785,6 +949,7 @@ export default function App() {
         setActiveTab={setActiveTab}
         ordersCount={activeOrdersCount}
         urgentCount={urgentOrdersCount}
+        clientsCount={clients.length}
         isOpenMobile={isOpenMobile}
         setIsOpenMobile={setIsOpenMobile}
         logoUrl={profile.logoUrl}
@@ -809,6 +974,7 @@ export default function App() {
           {activeTab === 'criar-pedido' && (
             <NovoPedidoView
               catalog={catalog}
+              clients={clients}
               initialData={orderDraftToCreate}
               onClearInitialData={() => setOrderDraftToCreate(null)}
               onSaveOrder={handleSaveOrder}
@@ -825,6 +991,17 @@ export default function App() {
               onUpdateStatus={handleUpdateStatus}
               onDeleteOrder={handleDeleteOrder}
               onNavigateToNewOrder={() => setActiveTab('criar-pedido')}
+            />
+          )}
+
+          {activeTab === 'clientes' && (
+            <ClientesView
+              clients={clients}
+              orders={orders}
+              onAddClient={handleAddClient}
+              onUpdateClient={handleUpdateClient}
+              onDeleteClient={handleDeleteClient}
+              onSelectClientForOrder={handleSelectClientForOrder}
             />
           )}
 

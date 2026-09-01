@@ -1,4 +1,61 @@
-import { AtelieProfile, CatalogItem, Order, Quotation } from '../types';
+import { AtelieProfile, CatalogItem, Client, Order, Quotation } from '../types';
+
+export const INITIAL_CLIENTS: Client[] = [
+  {
+    id: 'cli-1',
+    name: 'Maria Clara Silva',
+    phone: '(11) 99123-4567',
+    instagram: '@mariaclarasilva',
+    email: 'mariaclara@gmail.com',
+    cpf: '123.456.789-00',
+    address: 'Av. Paulista, 1000, Apto 42, Bela Vista',
+    city: 'São Paulo',
+    state: 'SP',
+    zipCode: '01310-100',
+    birthDate: '1992-05-14',
+    childName: 'Helena',
+    childBirthDate: '2022-09-05',
+    notes: 'Ama tons pastéis e temas florais delicados. Sempre pede itens com glitter.',
+    createdAt: '2026-08-01T10:00:00Z',
+    updatedAt: '2026-08-28T14:30:00Z',
+  },
+  {
+    id: 'cli-2',
+    name: 'Juliana Mendes',
+    phone: '(11) 98765-1122',
+    instagram: '@jumendes_festas',
+    email: 'juliana.mendes@hotmail.com',
+    cpf: '234.567.890-11',
+    address: 'Rua das Flores, 250, Jardim Botânico',
+    city: 'Campinas',
+    state: 'SP',
+    zipCode: '13080-000',
+    birthDate: '1988-11-20',
+    childName: 'Arthur',
+    childBirthDate: '2020-09-12',
+    notes: 'Cliente frequente. Prefere envio por Sedex e confirmação prévia da arte.',
+    createdAt: '2026-08-05T11:00:00Z',
+    updatedAt: '2026-08-29T10:00:00Z',
+  },
+  {
+    id: 'cli-3',
+    name: 'Fernanda Oliveira',
+    phone: '(11) 98123-9988',
+    instagram: '@fer_oliveira',
+    email: 'fernanda.oliveira@gmail.com',
+    cpf: '345.678.901-22',
+    address: 'Rua Oscar Freire, 500, Cerqueira César',
+    city: 'São Paulo',
+    state: 'SP',
+    zipCode: '01426-001',
+    birthDate: '1995-03-08',
+    childName: 'Valentina',
+    childBirthDate: '2021-08-30',
+    notes: 'Gosta de acabamento em lamicote dourado e detalhes em 3D shaker.',
+    createdAt: '2026-08-10T14:00:00Z',
+    updatedAt: '2026-08-30T15:00:00Z',
+  }
+];
 
 export const INITIAL_ATELIE_PROFILE: AtelieProfile = {
   name: 'Organize Ateliê - Luccy Ribeiro',

@@ -15,10 +15,13 @@ import {
   Trash2,
   Upload,
   User,
+  UserCheck,
+  Users,
   X
 } from 'lucide-react';
 import {
   CatalogItem,
+  Client,
   DeliveryMethod,
   OrderItem,
   OrderOrigin,
@@ -36,6 +39,7 @@ import { INSPIRATIONS } from '../data/initialData';
 
 interface NovoPedidoViewProps {
   catalog: CatalogItem[];
+  clients?: Client[];
   initialData?: Partial<Order> | null;
   onClearInitialData?: () => void;
   onSaveOrder: (order: Order, isDraft?: boolean) => void;
@@ -44,6 +48,7 @@ interface NovoPedidoViewProps {
 
 export const NovoPedidoView: React.FC<NovoPedidoViewProps> = ({
   catalog,
+  clients = [],
   initialData,
   onClearInitialData,
   onSaveOrder,
@@ -332,14 +337,87 @@ export const NovoPedidoView: React.FC<NovoPedidoViewProps> = ({
         <div className="lg:col-span-8 space-y-6">
           {/* Card 1: Dados do Cliente */}
           <div className="bg-white rounded-3xl p-6 sm:p-8 shadow-atelie border border-pink-100/70 space-y-6">
-            <div className="flex items-center gap-3">
-              <div className="w-9 h-9 rounded-2xl bg-pink-100/70 flex items-center justify-center text-[#ac2471]">
-                <User className="w-4 h-4" />
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-3">
+                <div className="w-9 h-9 rounded-2xl bg-pink-100/70 flex items-center justify-center text-[#ac2471]">
+                  <User className="w-4 h-4" />
+                </div>
+                <div>
+                  <h2 className="text-lg font-heading font-bold text-slate-800 tracking-tight">
+                    Dados do Cliente
+                  </h2>
+                  <p className="text-xs text-slate-500">
+                    Selecione uma cliente já cadastrada ou digite novas informações abaixo.
+                  </p>
+                </div>
               </div>
-              <h2 className="text-lg font-heading font-bold text-slate-800 tracking-tight">
-                Dados do Cliente
-              </h2>
             </div>
+
+            {/* Quick Picker: Clientes Cadastrados */}
+            {clients && clients.length > 0 && (
+              <div className="p-4 rounded-2xl bg-gradient-to-r from-pink-50/80 via-white to-pink-50/80 border border-pink-200/90 shadow-2xs space-y-2.5">
+                <div className="flex items-center justify-between">
+                  <span className="text-xs font-bold text-slate-800 flex items-center gap-1.5">
+                    <Users className="w-4 h-4 text-[#ac2471]" />
+                    <span>Escolher Cliente Cadastrada</span>
+                  </span>
+
+                  {clientName && (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setClientName('');
+                        setClientPhone('');
+                        setClientInstagram('');
+                        setDeliveryAddress('');
+                      }}
+                      className="text-[11px] font-semibold text-slate-400 hover:text-slate-700 underline cursor-pointer"
+                    >
+                      Limpar seleção
+                    </button>
+                  )}
+                </div>
+
+                <select
+                  value={
+                    clients.find(
+                      (c) =>
+                        c.name.trim().toLowerCase() === clientName.trim().toLowerCase() ||
+                        (clientPhone && c.phone.replace(/\D/g, '') === clientPhone.replace(/\D/g, ''))
+                    )?.id || ''
+                  }
+                  onChange={(e) => {
+                    const selected = clients.find((c) => c.id === e.target.value);
+                    if (selected) {
+                      setClientName(selected.name);
+                      setClientPhone(selected.phone);
+                      if (selected.instagram) setClientInstagram(selected.instagram);
+                      if (selected.address || selected.city) {
+                        const fullAddr = [
+                          selected.address,
+                          selected.city ? `${selected.city}/${selected.state || 'SP'}` : '',
+                          selected.zipCode ? `CEP: ${selected.zipCode}` : '',
+                        ]
+                          .filter(Boolean)
+                          .join(' - ');
+                        setDeliveryAddress(fullAddr);
+                      }
+                      if (selected.childName && !honoreeName) {
+                        setHonoreeName(selected.childName);
+                      }
+                    }
+                  }}
+                  className="w-full px-3.5 py-2.5 bg-white border border-pink-200 rounded-xl text-xs font-medium text-slate-800 focus:outline-hidden focus:ring-2 focus:ring-[#ac2471]/20 cursor-pointer"
+                >
+                  <option value="">-- Selecione uma cliente cadastrada no ateliê --</option>
+                  {clients.map((c) => (
+                    <option key={c.id} value={c.id}>
+                      👤 {c.name} • Tel: {c.phone} {c.childName ? `• Filho(a): ${c.childName}` : ''}
+                    </option>
+                  ))}
+                </select>
+              </div>
+            )}
 
             {/* Row 1: Nome da Cliente */}
             <div>

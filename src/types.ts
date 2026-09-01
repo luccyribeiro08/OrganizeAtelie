@@ -146,3 +146,31 @@ export interface UserAccount {
   logoUrl?: string;
   createdAt: string;
 }
+
+export interface Client {
+  id: string;
+  name: string;
+  phone: string;
+  instagram?: string;
+  email?: string;
+  cpf?: string;
+  address?: string;
+  city?: string;
+  state?: string;
+  zipCode?: string;
+  birthDate?: string;
+  childName?: string;
+  childBirthDate?: string;
+  notes?: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export type ActiveTab =
+  | 'pedidos'
+  | 'criar-pedido'
+  | 'clientes'
+  | 'catalogo'
+  | 'orcamento'
+  | 'agenda'
+  | 'configuracoes';

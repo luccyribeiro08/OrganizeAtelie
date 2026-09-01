@@ -124,7 +124,30 @@ CREATE TABLE IF NOT EXISTS public.calendar_events (
 );
 
 -- ============================================================
--- 7. Índices de Otimização e Performance
+-- 7. Tabela de Clientes Cadastrados (NOVA)
+-- ============================================================
+CREATE TABLE IF NOT EXISTS public.clients (
+  id TEXT PRIMARY KEY,
+  user_id TEXT NOT NULL,
+  name TEXT NOT NULL,
+  phone TEXT NOT NULL,
+  instagram TEXT,
+  email TEXT,
+  cpf TEXT,
+  address TEXT,
+  city TEXT,
+  state TEXT,
+  zip_code TEXT,
+  birth_date DATE,
+  child_name TEXT,
+  child_birth_date DATE,
+  notes TEXT,
+  created_at TIMESTAMPTZ DEFAULT NOW(),
+  updated_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+-- ============================================================
+-- 8. Índices de Otimização e Performance
 -- ============================================================
 CREATE INDEX IF NOT EXISTS idx_orders_user_id ON public.orders(user_id);
 CREATE INDEX IF NOT EXISTS idx_orders_delivery_date ON public.orders(delivery_date);
@@ -134,18 +157,22 @@ CREATE INDEX IF NOT EXISTS idx_quotations_user_id ON public.quotations(user_id);
 CREATE INDEX IF NOT EXISTS idx_quotations_status ON public.quotations(status);
 CREATE INDEX IF NOT EXISTS idx_calendar_events_user_id ON public.calendar_events(user_id);
 CREATE INDEX IF NOT EXISTS idx_calendar_events_date ON public.calendar_events(event_date);
+CREATE INDEX IF NOT EXISTS idx_clients_user_id ON public.clients(user_id);
+CREATE INDEX IF NOT EXISTS idx_clients_name ON public.clients(name);
+CREATE INDEX IF NOT EXISTS idx_clients_phone ON public.clients(phone);
 
 -- ============================================================
--- 8. Habilitar Row Level Security (RLS)
+-- 9. Habilitar Row Level Security (RLS)
 -- ============================================================
 ALTER TABLE public.profiles ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.orders ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.catalog ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.quotations ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.calendar_events ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.clients ENABLE ROW LEVEL SECURITY;
 
 -- ============================================================
--- 9. Políticas de Acesso (RLS Policies)
+-- 10. Políticas de Acesso (RLS Policies)
 -- Permitem leitura, inserção, atualização e exclusão seguras
 -- ============================================================
 DROP POLICY IF EXISTS "Permitir acesso completo a profiles" ON public.profiles;
@@ -162,3 +189,6 @@ CREATE POLICY "Permitir acesso completo a quotations" ON public.quotations FOR A
 
 DROP POLICY IF EXISTS "Permitir acesso completo a calendar_events" ON public.calendar_events;
 CREATE POLICY "Permitir acesso completo a calendar_events" ON public.calendar_events FOR ALL USING (true) WITH CHECK (true);
+
+DROP POLICY IF EXISTS "Permitir acesso completo a clients" ON public.clients;
+CREATE POLICY "Permitir acesso completo a clients" ON public.clients FOR ALL USING (true) WITH CHECK (true);

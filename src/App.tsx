@@ -199,6 +199,9 @@ export default function App() {
         supabaseService.getCatalog(currentUser.id).then((remoteCatalog) => {
           if (remoteCatalog && remoteCatalog.length > 0) setCatalog(remoteCatalog);
         });
+        supabaseService.getQuotations(currentUser.id).then((remoteQuotes) => {
+          if (remoteQuotes && remoteQuotes.length > 0) setQuotations(remoteQuotes);
+        });
       }
     } else {
       localStorage.removeItem('atelie_active_session_id_v2');
@@ -462,11 +465,17 @@ export default function App() {
       }
       return [quote, ...prev];
     });
+    if (currentUser && currentUser.id !== 'user-luccy-default') {
+      supabaseService.saveQuotation(currentUser.id, quote);
+    }
   };
 
   // Handler: Delete Quotation
   const handleDeleteQuotation = (quoteId: string) => {
     setQuotations((prev) => prev.filter((q) => q.id !== quoteId));
+    if (currentUser && currentUser.id !== 'user-luccy-default') {
+      supabaseService.deleteQuotation(quoteId);
+    }
   };
 
   // Handler: Approve and Create Order from Quote

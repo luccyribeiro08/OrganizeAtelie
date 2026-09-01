@@ -1,5 +1,5 @@
-﻿import { supabase } from '../lib/supabaseClient';
-import { AtelieProfile, CatalogItem, Order, UserAccount } from '../types';
+import { supabase } from '../lib/supabaseClient';
+import { AtelieProfile, CatalogItem, Order, Quotation } from '../types';
 
 export const supabaseService = {
   // --- PROFILES ---
@@ -81,6 +81,7 @@ export const supabaseService = {
         personalization: d.personalization || {},
         financial: d.financial || {},
         status: d.status,
+        completedAt: d.completed_at || undefined,
         mockupImages: d.mockup_images || [],
         createdAt: d.created_at,
         updatedAt: d.updated_at,
@@ -111,6 +112,7 @@ export const supabaseService = {
         personalization: order.personalization,
         financial: order.financial,
         status: order.status,
+        completed_at: order.completedAt || null,
         mockup_images: order.mockupImages,
         updated_at: new Date().toISOString(),
       });
@@ -183,6 +185,81 @@ export const supabaseService = {
       return !error;
     } catch (e) {
       console.error('Error deleting catalog item from Supabase', e);
+      return false;
+    }
+  },
+
+  // --- QUOTATIONS ---
+  async getQuotations(userId: string): Promise<Quotation[]> {
+    try {
+      const { data, error } = await supabase
+        .from('quotations')
+        .select('*')
+        .eq('user_id', userId)
+        .order('created_at', { ascending: false });
+
+      if (error || !data) return [];
+      return data.map((q: any) => ({
+        id: q.id,
+        code: q.code,
+        clientName: q.client_name,
+        clientPhone: q.client_phone || '',
+        theme: q.theme,
+        materials: q.materials || [],
+        laborCost: parseFloat(q.labor_cost) || 25,
+        additionalCosts: parseFloat(q.additional_costs) || 0,
+        profitMargin: parseFloat(q.profit_margin) || 40,
+        calculatedPrice: parseFloat(q.calculated_price) || 0,
+        suggestedPrice: parseFloat(q.suggested_price) || 0,
+        roundedPrice: parseFloat(q.rounded_price) || parseFloat(q.suggested_price) || 0,
+        date: q.date,
+        validDays: q.valid_days || 7,
+        notes: q.notes || '',
+        status: q.status || 'Pendente',
+        createdAt: q.created_at,
+        updatedAt: q.updated_at,
+      }));
+    } catch (e) {
+      console.error('Error fetching quotations from Supabase', e);
+      return [];
+    }
+  },
+
+  async saveQuotation(userId: string, quote: Quotation): Promise<boolean> {
+    try {
+      const { error } = await supabase.from('quotations').upsert({
+        id: quote.id,
+        user_id: userId,
+        code: quote.code,
+        client_name: quote.clientName,
+        client_phone: quote.clientPhone,
+        theme: quote.theme,
+        materials: quote.materials,
+        labor_cost: quote.laborCost,
+        additional_costs: quote.additionalCosts,
+        profit_margin: quote.profitMargin,
+        calculated_price: quote.calculatedPrice,
+        suggested_price: quote.suggestedPrice,
+        rounded_price: quote.roundedPrice || quote.suggestedPrice,
+        date: quote.date,
+        valid_days: quote.validDays,
+        notes: quote.notes,
+        status: quote.status,
+        updated_at: new Date().toISOString(),
+      });
+      return !error;
+    } catch (e) {
+      console.error('Error saving quotation to Supabase', e);
+      return false;
+    }
+  },
+
+  async deleteQuotation(quoteId: string): Promise<boolean> {
+    try {
+      const { error } = await supabase.from('quotations').delete().eq('id', quoteId);
+      return !error;
+    } catch (e) {
+      console.error('Error deleting quotation from Supabase', e);
       return false;
     }
   },

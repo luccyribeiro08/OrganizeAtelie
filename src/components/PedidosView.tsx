@@ -53,6 +53,7 @@ interface PedidosViewProps {
   onUpdateStatus: (orderId: string, status: OrderStatus) => void;
   onDeleteOrder: (orderId: string) => void;
   onNavigateToNewOrder: () => void;
+  onNotifyInProduction?: (order: Order) => void;
   onNotifyReady?: (order: Order) => void;
   onNotifyCompleted?: (order: Order) => void;
 }
@@ -65,6 +66,7 @@ export const PedidosView: React.FC<PedidosViewProps> = ({
   onUpdateStatus,
   onDeleteOrder,
   onNavigateToNewOrder,
+  onNotifyInProduction,
   onNotifyReady,
   onNotifyCompleted
 }) => {
@@ -550,6 +552,18 @@ export const PedidosView: React.FC<PedidosViewProps> = ({
                         {/* Ações */}
                         <td className="py-4 px-6 text-right" onClick={(e) => e.stopPropagation()}>
                           <div className="flex items-center justify-end gap-1.5">
+                            {/* If Em Produção, show highlighted Avisar Producao button */}
+                            {order.status === 'Em Produção' && onNotifyInProduction && (
+                              <button
+                                onClick={() => onNotifyInProduction(order)}
+                                className="px-2.5 py-1 text-[11px] font-bold text-white bg-gradient-to-r from-amber-500 to-orange-600 hover:from-amber-600 hover:to-orange-700 rounded-xl flex items-center gap-1 shadow-xs transition-all active:scale-95 cursor-pointer"
+                                title="Avisar no WhatsApp que a encomenda entrou em produção!"
+                              >
+                                <Sparkles className="w-3 h-3" />
+                                <span>Avisar Produção</span>
+                              </button>
+                            )}
+
                             {/* If Pronto p/ Envio, show highlighted Avisar Pronto button */}
                             {order.status === 'Pronto p/ Envio' && onNotifyReady && (
                               <button
@@ -754,6 +768,19 @@ export const PedidosView: React.FC<PedidosViewProps> = ({
                               {order.origin}
                             </span>
                           </div>
+
+                          {order.status === 'Em Produção' && onNotifyInProduction && (
+                            <button
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                onNotifyInProduction(order);
+                              }}
+                              className="w-full mt-2 py-1.5 px-3 rounded-xl bg-gradient-to-r from-amber-500 to-orange-600 hover:from-amber-600 hover:to-orange-700 text-white text-xs font-bold flex items-center justify-center gap-1.5 shadow-xs transition-all active:scale-95 cursor-pointer"
+                            >
+                              <Sparkles className="w-3.5 h-3.5" />
+                              <span>Avisar Produção</span>
+                            </button>
+                          )}
 
                           {order.status === 'Pronto p/ Envio' && onNotifyReady && (
                             <button

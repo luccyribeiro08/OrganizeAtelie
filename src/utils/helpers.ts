@@ -74,15 +74,17 @@ export function generateWhatsAppOrderMessage(
     order.financial.paymentProgress ||
     (order.financial.total > 0
       ? Math.round((order.financial.deposit / order.financial.total) * 100)
-      : 0);
+      : 50);
 
-  const depositText = `• *Sinal Pago (Entrada${depositPercent > 0 ? ` ${depositPercent}%` : ''}):* ${formatCurrency(order.financial.deposit)}`;
+  const depositVal = order.financial.deposit > 0 ? order.financial.deposit : order.financial.total * 0.5;
+
+  const depositText = `• *Sinal de 50% para Início da Produção:* ${formatCurrency(depositVal)}`;
 
   let remainingText = '';
   if (order.status === 'Finalizado' || order.financial.remaining <= 0) {
     remainingText = `• *Saldo Restante:* 100% Quitado / Pago ✓`;
   } else {
-    remainingText = `• *Valor Restante (a pagar na entrega do produto ou retirada):* ${formatCurrency(order.financial.remaining)}`;
+    remainingText = `• *Valor Restante (a pagar na entrega ou retirada):* ${formatCurrency(order.financial.remaining)}`;
   }
 
   const itemsText = order.items
@@ -102,14 +104,42 @@ export function generateWhatsAppOrderMessage(
     `• *Data de Entrega:* ${formatDate(order.deliveryDate)}\n` +
     `• *Forma de Entrega:* ${order.deliveryMethod}\n\n` +
     `📦 *Itens:*\n${itemsText}\n\n` +
-    `💰 *Financeiro:*\n` +
+    `💰 *Valores:*\n` +
     `• *Valor Total:* ${formatCurrency(order.financial.total)}\n` +
     `${depositText}\n` +
-    `${remainingText}\n` +
-    (order.financial.remaining > 0 && key
-      ? `\n🔑 *Chave PIX para pagamento do saldo:* \`${key}\`\n`
-      : '') +
-    `\nEstamos preparando tudo nos mínimos detalhes com muito carinho! Se tiver qualquer dúvida, é só nos chamar por aqui! 💖✂️`
+    `${remainingText}\n\n` +
+    `⚠️ *Informação Importante sobre a Produção:*\n` +
+    `Para a segurança da confecção personalizada e garantia de agendamento na nossa pauta, *o seu pedido só entrará em produção mediante a confirmação do pagamento dos 50% de sinal*.\n` +
+    (key ? `\n🔑 *Chave PIX para pagamento do sinal:* \`${key}\`\n` : '') +
+    `\nAssim que realizar o pagamento, por favor nos envie o comprovante por aqui para iniciarmos a sua encomenda com todo amor e carinho! 💖✂️`
+  );
+}
+
+export function generateInProductionWhatsAppMessage(
+  order: Order,
+  ownerName?: string,
+  atelieName?: string
+): string {
+  const sender = ownerName || 'Luccy Ribeiro';
+  const atelie = atelieName || 'Organize Ateliê';
+  const depositPaid =
+    order.financial.deposit > 0
+      ? ` (Sinal de ${formatCurrency(order.financial.deposit)})`
+      : '';
+
+  const deliveryAction = order.deliveryMethod === 'Retirada no Ateliê' ? 'retirada no ateliê' : 'envio / entrega';
+
+  return (
+    `✂️ *SINAL RECEBIDO & ENCOMENDA EM PRODUÇÃO!* ✂️\n\n` +
+    `Olá, *${order.clientName}*! Tudo bem? 🌸\n\n` +
+    `Aqui é *${sender}* do *${atelie}*! Passando para confirmar que *recebemos o valor do seu sinal*${depositPaid} e a sua encomenda *${order.theme}* (Pedido *${order.code}*) *já entrou em fase de produção*! 🥰💖\n\n` +
+    `📋 *Detalhes da Encomenda:*\n` +
+    `• *Tema:* ${order.theme}\n` +
+    `• *Data Estabelecida:* ${formatDate(order.deliveryDate)}\n` +
+    `• *Forma de Entrega:* ${order.deliveryMethod}\n\n` +
+    `✨ *Fique tranquila:* Seu pedido estará prontinho para ${deliveryAction} no dia estabelecido no pedido!\n\n` +
+    `📲 *Fique atenta ao WhatsApp:* Assim que sua encomenda estiver 100% pronta e finalizada, te enviaremos uma mensagem automática por aqui com todos os detalhes de retirada/envio! 📦🛵\n\n` +
+    `Estamos preparando tudo nos mínimos detalhes com muito carinho e capricho! Um abraço carinhoso! ✂️🎀💌`
   );
 }
 

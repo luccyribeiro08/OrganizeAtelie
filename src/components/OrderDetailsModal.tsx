@@ -32,6 +32,7 @@ interface OrderDetailsModalProps {
   onClose: () => void;
   onUpdateStatus: (orderId: string, status: OrderStatus) => void;
   onPrintOrder: (order: Order) => void;
+  onNotifyInProduction?: (order: Order) => void;
   onNotifyReady?: (order: Order) => void;
   onNotifyCompleted?: (order: Order) => void;
 }
@@ -42,6 +43,7 @@ export const OrderDetailsModal: React.FC<OrderDetailsModalProps> = ({
   onClose,
   onUpdateStatus,
   onPrintOrder,
+  onNotifyInProduction,
   onNotifyReady,
   onNotifyCompleted
 }) => {
@@ -361,6 +363,18 @@ export const OrderDetailsModal: React.FC<OrderDetailsModalProps> = ({
               <MessageCircle className="w-4 h-4" />
               <span>Abrir WhatsApp</span>
             </a>
+
+            {order.status === 'Em Produção' && onNotifyInProduction && (
+              <button
+                type="button"
+                onClick={() => onNotifyInProduction(order)}
+                className="flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-gradient-to-r from-amber-500 to-orange-600 hover:from-amber-600 hover:to-orange-700 text-white text-xs font-bold shadow-xs transition-all active:scale-95 cursor-pointer"
+                title="Avisar a cliente que o sinal foi recebido e a encomenda está em produção"
+              >
+                <Sparkles className="w-4 h-4" />
+                <span>Avisar Início da Produção</span>
+              </button>
+            )}
 
             {order.status === 'Pronto p/ Envio' && onNotifyReady && (
               <button

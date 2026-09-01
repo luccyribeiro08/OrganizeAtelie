@@ -12,6 +12,7 @@ import { OrderDetailsModal } from './components/OrderDetailsModal';
 import { OrderReceiptModal } from './components/OrderReceiptModal';
 import { OrderReadyNotificationModal } from './components/OrderReadyNotificationModal';
 import { OrderCompletedNotificationModal } from './components/OrderCompletedNotificationModal';
+import { OrderInProductionNotificationModal } from './components/OrderInProductionNotificationModal';
 import { AuthView } from './components/AuthView';
 import { ActiveTab, AtelieProfile, CatalogItem, Client, Order, OrderStatus, Quotation, UserAccount } from './types';
 import {
@@ -254,6 +255,7 @@ export default function App() {
   // Modals
   const [selectedOrder, setSelectedOrder] = useState<Order | null>(null);
   const [orderToPrint, setOrderToPrint] = useState<Order | null>(null);
+  const [orderInProductionForNotification, setOrderInProductionForNotification] = useState<Order | null>(null);
   const [orderReadyForNotification, setOrderReadyForNotification] = useState<Order | null>(null);
   const [orderCompletedForNotification, setOrderCompletedForNotification] = useState<Order | null>(null);
 
@@ -584,6 +586,11 @@ export default function App() {
       // Persist to Supabase immediately for cloud accounts
       if (currentUser && currentUser.id !== 'user-luccy-default') {
         supabaseService.saveOrder(currentUser.id, updated);
+      }
+
+      // If status changed to "Em Produção", trigger WhatsApp in-production notification modal
+      if (status === 'Em Produção') {
+        setOrderInProductionForNotification(updated);
       }
 
       // If status changed to "Pronto p/ Envio", trigger WhatsApp notification modal
@@ -1005,6 +1012,7 @@ export default function App() {
               onUpdateStatus={handleUpdateStatus}
               onDeleteOrder={handleDeleteOrder}
               onNavigateToNewOrder={() => setActiveTab('criar-pedido')}
+              onNotifyInProduction={(ord) => setOrderInProductionForNotification(ord)}
               onNotifyReady={(ord) => setOrderReadyForNotification(ord)}
               onNotifyCompleted={(ord) => setOrderCompletedForNotification(ord)}
             />
@@ -1070,6 +1078,7 @@ export default function App() {
             setSelectedOrder(null);
             setOrderToPrint(ord);
           }}
+          onNotifyInProduction={(ord) => setOrderInProductionForNotification(ord)}
           onNotifyReady={(ord) => setOrderReadyForNotification(ord)}
           onNotifyCompleted={(ord) => setOrderCompletedForNotification(ord)}
         />
@@ -1080,6 +1089,15 @@ export default function App() {
           order={orderToPrint}
           profile={profile}
           onClose={() => setOrderToPrint(null)}
+        />
+      )}
+
+      {orderInProductionForNotification && (
+        <OrderInProductionNotificationModal
+          order={orderInProductionForNotification}
+          profile={profile}
+          clients={clients}
+          onClose={() => setOrderInProductionForNotification(null)}
         />
       )}
 

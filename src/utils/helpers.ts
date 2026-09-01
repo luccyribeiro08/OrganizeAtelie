@@ -113,6 +113,57 @@ export function generateWhatsAppOrderMessage(
   );
 }
 
+export function generateOrderReadyWhatsAppMessage(
+  order: Order,
+  ownerName?: string,
+  atelieName?: string,
+  atelieAddress?: string,
+  pixKey?: string
+): string {
+  const sender = ownerName || 'Luccy Ribeiro';
+  const atelie = atelieName || 'Organize Ateliê';
+  const delivery = order.deliveryMethod || 'Retirada no Ateliê';
+
+  let deliveryInstruction = '';
+  if (delivery === 'Retirada no Ateliê') {
+    deliveryInstruction =
+      `🏪 *Instruções de Retirada:*\n` +
+      `Sua encomenda já está pronta, embalada com todo capricho e te esperando para retirada no ateliê!\n` +
+      (atelieAddress ? `📍 *Endereço:* ${atelieAddress}\n` : '') +
+      (order.deliveryAddress ? `📝 *Observação de Retirada:* ${order.deliveryAddress}\n` : '');
+  } else if (delivery === 'Motoboy') {
+    deliveryInstruction =
+      `🛵 *Entrega via Motoboy:*\n` +
+      `Sua encomenda já está prontinha e embalada com todo cuidado para ser enviada por motoboy!\n` +
+      (order.deliveryAddress ? `📍 *Endereço de Entrega:* ${order.deliveryAddress}\n` : '') +
+      `Assim que o motoboy sair para a rota de entrega, te avisamos por aqui! 🛵💨`;
+  } else {
+    deliveryInstruction =
+      `📦 *Envio via ${delivery}:*\n` +
+      `Sua encomenda já está finalizada e pronta para ser postada/despachada!\n` +
+      (order.deliveryAddress ? `📍 *Endereço de Destino:* ${order.deliveryAddress}\n` : '') +
+      `Assim que realizarmos a postagem, te encaminharemos o comprovante/código de rastreio! ✨`;
+  }
+
+  let financialText = '';
+  if (order.financial.remaining <= 0 || order.status === 'Finalizado') {
+    financialText = `💰 *Pagamento:* 100% Quitado / Pago ✓`;
+  } else {
+    financialText =
+      `💰 *Saldo Restante a Pagar na Entrega/Retirada:* ${formatCurrency(order.financial.remaining)}\n` +
+      (pixKey ? `🔑 *Chave PIX:* \`${pixKey}\`` : '');
+  }
+
+  return (
+    `✨ *OBA! SEU PEDIDO ESTÁ PRONTO!* ✨\n\n` +
+    `Olá, *${order.clientName}*! Tudo bem?\n` +
+    `Aqui é *${sender}* do *${atelie}*! Passando com muita alegria para avisar que sua encomenda *${order.theme}* (Pedido *${order.code}*) está 100% pronta e linda! 💖✂️\n\n` +
+    `${deliveryInstruction.trim()}\n\n` +
+    `${financialText.trim()}\n\n` +
+    `Ficamos muito felizes em fazer parte deste momento especial! Se precisar de algo ou for retirar, é só nos responder por aqui! 🌸🎀`
+  );
+}
+
 export function triggerConfetti() {
   confetti({
     particleCount: 80,

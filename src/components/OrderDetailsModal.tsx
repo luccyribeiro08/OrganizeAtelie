@@ -32,6 +32,7 @@ interface OrderDetailsModalProps {
   onClose: () => void;
   onUpdateStatus: (orderId: string, status: OrderStatus) => void;
   onPrintOrder: (order: Order) => void;
+  onNotifyReady?: (order: Order) => void;
 }
 
 export const OrderDetailsModal: React.FC<OrderDetailsModalProps> = ({
@@ -39,7 +40,8 @@ export const OrderDetailsModal: React.FC<OrderDetailsModalProps> = ({
   profile,
   onClose,
   onUpdateStatus,
-  onPrintOrder
+  onPrintOrder,
+  onNotifyReady
 }) => {
   const [copiedWA, setCopiedWA] = useState(false);
   const [selectedImagePreview, setSelectedImagePreview] = useState<string | null>(null);
@@ -347,7 +349,7 @@ export const OrderDetailsModal: React.FC<OrderDetailsModalProps> = ({
 
         {/* Bottom Actions */}
         <div className="flex flex-wrap items-center justify-between gap-3 pt-4 border-t border-pink-100">
-          <div className="flex items-center gap-2">
+          <div className="flex flex-wrap items-center gap-2">
             <a
               href={waLink}
               target="_blank"
@@ -357,6 +359,18 @@ export const OrderDetailsModal: React.FC<OrderDetailsModalProps> = ({
               <MessageCircle className="w-4 h-4" />
               <span>Abrir WhatsApp</span>
             </a>
+
+            {order.status === 'Pronto p/ Envio' && onNotifyReady && (
+              <button
+                type="button"
+                onClick={() => onNotifyReady(order)}
+                className="flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-gradient-to-r from-teal-500 to-emerald-600 hover:from-teal-600 hover:to-emerald-700 text-white text-xs font-bold shadow-xs transition-all active:scale-95 cursor-pointer"
+                title="Avisar a cliente que a encomenda está pronta para retirada/envio"
+              >
+                <Sparkles className="w-4 h-4" />
+                <span>Avisar Pedido Pronto</span>
+              </button>
+            )}
 
             <button
               onClick={handleCopyMessage}

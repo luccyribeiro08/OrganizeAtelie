@@ -10,6 +10,7 @@ import { AgendaView } from './components/AgendaView';
 import { ConfiguracoesView } from './components/ConfiguracoesView';
 import { OrderDetailsModal } from './components/OrderDetailsModal';
 import { OrderReceiptModal } from './components/OrderReceiptModal';
+import { OrderReadyNotificationModal } from './components/OrderReadyNotificationModal';
 import { AuthView } from './components/AuthView';
 import { ActiveTab, AtelieProfile, CatalogItem, Client, Order, OrderStatus, Quotation, UserAccount } from './types';
 import {
@@ -252,6 +253,7 @@ export default function App() {
   // Modals
   const [selectedOrder, setSelectedOrder] = useState<Order | null>(null);
   const [orderToPrint, setOrderToPrint] = useState<Order | null>(null);
+  const [orderReadyForNotification, setOrderReadyForNotification] = useState<Order | null>(null);
 
   // Persist registered users
   useEffect(() => {
@@ -580,6 +582,11 @@ export default function App() {
       // Persist to Supabase immediately for cloud accounts
       if (currentUser && currentUser.id !== 'user-luccy-default') {
         supabaseService.saveOrder(currentUser.id, updated);
+      }
+
+      // If status changed to "Pronto p/ Envio", trigger WhatsApp notification modal
+      if (status === 'Pronto p/ Envio') {
+        setOrderReadyForNotification(updated);
       }
 
       return updatedList;
@@ -991,6 +998,7 @@ export default function App() {
               onUpdateStatus={handleUpdateStatus}
               onDeleteOrder={handleDeleteOrder}
               onNavigateToNewOrder={() => setActiveTab('criar-pedido')}
+              onNotifyReady={(ord) => setOrderReadyForNotification(ord)}
             />
           )}
 
@@ -1054,6 +1062,7 @@ export default function App() {
             setSelectedOrder(null);
             setOrderToPrint(ord);
           }}
+          onNotifyReady={(ord) => setOrderReadyForNotification(ord)}
         />
       )}
 
@@ -1062,6 +1071,15 @@ export default function App() {
           order={orderToPrint}
           profile={profile}
           onClose={() => setOrderToPrint(null)}
+        />
+      )}
+
+      {orderReadyForNotification && (
+        <OrderReadyNotificationModal
+          order={orderReadyForNotification}
+          profile={profile}
+          clients={clients}
+          onClose={() => setOrderReadyForNotification(null)}
         />
       )}
     </div>

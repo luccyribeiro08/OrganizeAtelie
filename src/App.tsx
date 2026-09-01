@@ -1179,7 +1179,7 @@ export default function App() {
       />
 
       {/* Main Content Area */}
-      <div className="flex-1 flex flex-col min-w-0 pb-16 md:pb-0 overflow-x-hidden">
+      <div className="flex-1 flex flex-col min-w-0 lg:pl-64 pb-16 md:pb-0 overflow-x-auto">
         {/* Top Header */}
         <Header
           profile={profile}

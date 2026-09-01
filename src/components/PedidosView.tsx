@@ -397,8 +397,8 @@ export const PedidosView: React.FC<PedidosViewProps> = ({
               </button>
             </div>
           ) : (
-            <div className="overflow-x-auto">
-              <table className="w-full text-left text-xs text-slate-600">
+            <div className="overflow-x-auto w-full">
+              <table className="w-full min-w-[850px] text-left text-xs text-slate-600">
                 <thead className="bg-[#faf7f8] border-b border-pink-100 text-[10px] font-bold text-slate-400 uppercase tracking-wider">
                   <tr>
                     <th className="py-4 px-6">Código / Cliente</th>
@@ -465,41 +465,44 @@ export const PedidosView: React.FC<PedidosViewProps> = ({
 
                         {/* Tema & Tipo */}
                         <td className="py-4 px-4">
-                          <span className="font-semibold text-slate-800 block">
-                            {order.theme}
-                          </span>
-                          <span className="text-[11px] text-slate-500">
-                            {order.orderType} • {order.items.length} itens
-                          </span>
+                          <div className="space-y-0.5">
+                            <span className="font-bold text-slate-800 text-xs block">
+                              {order.theme}
+                            </span>
+                            <span className="text-[11px] text-pink-700 font-medium block">
+                              {order.orderType} • {order.items.length} itens
+                            </span>
+                          </div>
                         </td>
 
                         {/* Origem */}
                         <td className="py-4 px-4">
-                          <span className="text-[11px] font-medium px-2.5 py-1 rounded-xl bg-pink-50 text-slate-700">
+                          <span className="inline-flex items-center px-2.5 py-1 rounded-full text-[11px] font-semibold bg-pink-50 text-[#ac2471]">
                             {order.origin}
                           </span>
                         </td>
 
-                        {/* Entrega */}
+                        {/* Entrega & Prazo */}
                         <td className="py-4 px-4">
-                          <div className="space-y-0.5">
-                            <span className="font-semibold text-slate-800 block">
+                          <div className="space-y-1">
+                            <span className="font-medium text-slate-700 block">
                               {formatDate(order.deliveryDate)}
                             </span>
                             {isFinalized ? (
-                              <span className="text-[10px] font-bold px-2 py-0.5 rounded-full inline-block bg-emerald-50 text-emerald-700">
-                                Entregue / Concluído
+                              <span className="inline-flex items-center gap-1 text-[10px] font-semibold text-emerald-600 bg-emerald-50 px-2 py-0.5 rounded-full">
+                                <CheckCircle2 className="w-3 h-3" /> Entregue
                               </span>
                             ) : (
                               <span
-                                className={`text-[10px] font-bold px-2 py-0.5 rounded-full inline-block ${
+                                className={`inline-flex items-center gap-1 text-[10px] font-bold px-2 py-0.5 rounded-full ${
                                   days.days <= 0
-                                    ? 'bg-rose-100 text-rose-700'
-                                    : days.days <= 2
+                                    ? 'bg-rose-100 text-rose-700 animate-pulse'
+                                    : days.days <= 3
                                     ? 'bg-amber-100 text-amber-800'
-                                    : 'bg-emerald-50 text-emerald-700'
+                                    : 'bg-slate-100 text-slate-600'
                                 }`}
                               >
+                                <Clock className="w-2.5 h-2.5" />
                                 {days.text}
                               </span>
                             )}
@@ -660,39 +663,40 @@ export const PedidosView: React.FC<PedidosViewProps> = ({
 
       {/* ================= VIEW 2: KANBAN BOARD ================= */}
       {viewMode === 'kanban' && (
-        <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-7 gap-4 items-start">
-          {allStatuses.map((status) => {
-            const isFinalizedColumn = status === 'Finalizado';
-            
-            // Orders for this column
-            const columnOrders = filteredOrders.filter((o) => o.status === status);
+        <div className="overflow-x-auto pb-6 w-full">
+          <div className="flex gap-4 min-w-max 2xl:min-w-0 2xl:grid 2xl:grid-cols-7 items-start">
+            {allStatuses.map((status) => {
+              const isFinalizedColumn = status === 'Finalizado';
+              
+              // Orders for this column
+              const columnOrders = filteredOrders.filter((o) => o.status === status);
 
-            return (
-              <div
-                key={status}
-                className={`rounded-3xl p-4 border shadow-xs space-y-3 min-h-[420px] transition-all ${
-                  isFinalizedColumn
-                    ? 'bg-gradient-to-b from-[#fdf8fa] to-[#fff5f8] border-pink-200/90'
-                    : 'bg-white/80 border-pink-100/80'
-                }`}
-              >
-                {/* Column Header */}
-                <div className="pb-2 border-b border-pink-100/80 space-y-1">
-                  <div className="flex items-center justify-between">
-                    <span className="font-heading font-bold text-xs text-slate-800 flex items-center gap-1.5">
-                      {isFinalizedColumn && <Lock className="w-3.5 h-3.5 text-[#ac2471]" />}
-                      <span>{status}</span>
-                    </span>
-                    <span
-                      className={`text-[11px] font-bold px-2 py-0.5 rounded-full ${
-                        isFinalizedColumn
-                          ? 'bg-[#ac2471] text-white'
-                          : 'bg-pink-50 text-[#ac2471]'
-                      }`}
-                    >
-                      {columnOrders.length}
-                    </span>
-                  </div>
+              return (
+                <div
+                  key={status}
+                  className={`w-[270px] sm:w-[290px] 2xl:w-auto flex-shrink-0 2xl:flex-shrink rounded-3xl p-4 border shadow-xs space-y-3 min-h-[420px] transition-all ${
+                    isFinalizedColumn
+                      ? 'bg-gradient-to-b from-[#fdf8fa] to-[#fff5f8] border-pink-200/90'
+                      : 'bg-white/80 border-pink-100/80'
+                  }`}
+                >
+                  {/* Column Header */}
+                  <div className="pb-2 border-b border-pink-100/80 space-y-1">
+                    <div className="flex items-center justify-between">
+                      <span className="font-heading font-bold text-xs text-slate-800 flex items-center gap-1.5">
+                        {isFinalizedColumn && <Lock className="w-3.5 h-3.5 text-[#ac2471]" />}
+                        <span>{status}</span>
+                      </span>
+                      <span
+                        className={`text-[11px] font-bold px-2 py-0.5 rounded-full ${
+                          isFinalizedColumn
+                            ? 'bg-[#ac2471] text-white'
+                            : 'bg-pink-50 text-[#ac2471]'
+                        }`}
+                      >
+                        {columnOrders.length}
+                      </span>
+                    </div>
 
                   {/* If Finalizado column, display month indicator and quick selector */}
                   {isFinalizedColumn && (
@@ -847,6 +851,7 @@ export const PedidosView: React.FC<PedidosViewProps> = ({
               </div>
             );
           })}
+          </div>
         </div>
       )}
 

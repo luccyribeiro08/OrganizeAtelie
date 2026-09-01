@@ -355,6 +355,14 @@ export default function App() {
             } catch (e) {}
           }
         });
+        supabaseService.getOrderTypes(currentUser.id).then((remoteTypes) => {
+          if (remoteTypes && remoteTypes.length > 0) {
+            setOrderTypes(remoteTypes);
+            try {
+              localStorage.setItem(`atelie_order_types_${currentUser.id}`, JSON.stringify(remoteTypes));
+            } catch (e) {}
+          }
+        });
         supabaseService.getQuotations(currentUser.id).then((remoteQuotes) => {
           if (remoteQuotes && remoteQuotes.length > 0) {
             setQuotations(remoteQuotes);
@@ -943,6 +951,9 @@ export default function App() {
         localStorage.setItem(`atelie_order_types_${currentUser.id}`, JSON.stringify(newTypes));
       } catch (e) {
         console.error(e);
+      }
+      if (currentUser.id !== 'user-luccy-default') {
+        supabaseService.saveOrderTypes(currentUser.id, newTypes);
       }
     }
   };

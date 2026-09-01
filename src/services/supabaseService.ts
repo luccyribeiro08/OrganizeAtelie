@@ -225,6 +225,42 @@ export const supabaseService = {
     }
   },
 
+  // --- ORDER TYPES ---
+  async getOrderTypes(userId: string): Promise<string[]> {
+    try {
+      const { data, error } = await supabase
+        .from('order_types')
+        .select('name')
+        .eq('user_id', userId)
+        .order('created_at', { ascending: true });
+
+      if (error || !data || data.length === 0) return [];
+      return data.map((d: any) => d.name);
+    } catch (e) {
+      console.error('Error fetching order types from Supabase', e);
+      return [];
+    }
+  },
+
+  async saveOrderTypes(userId: string, orderTypes: string[]): Promise<boolean> {
+    try {
+      const rows = orderTypes.map((typ, idx) => ({
+        id: `ord-typ-${userId}-${idx}-${typ.toLowerCase().replace(/[^a-z0-9]/g, '')}`,
+        user_id: userId,
+        name: typ,
+      }));
+      await supabase.from('order_types').delete().eq('user_id', userId);
+      if (rows.length > 0) {
+        const { error } = await supabase.from('order_types').insert(rows);
+        return !error;
+      }
+      return true;
+    } catch (e) {
+      console.error('Error saving order types to Supabase', e);
+      return false;
+    }
+  },
+
   // --- QUOTATIONS ---
   async getQuotations(userId: string): Promise<Quotation[]> {
     try {

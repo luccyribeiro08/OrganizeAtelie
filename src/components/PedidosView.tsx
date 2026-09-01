@@ -89,6 +89,7 @@ export const PedidosView: React.FC<PedidosViewProps> = ({
     'Arte Aprovada',
     'Em Produção',
     'Pronto p/ Envio',
+    'Enviado',
     'Finalizado'
   ];
 
@@ -148,6 +149,8 @@ export const PedidosView: React.FC<PedidosViewProps> = ({
         return 'bg-purple-100 text-purple-800 border-purple-200 animate-pulse';
       case 'Pronto p/ Envio':
         return 'bg-emerald-100 text-emerald-800 border-emerald-200';
+      case 'Enviado':
+        return 'bg-indigo-100 text-indigo-800 border-indigo-200';
       case 'Finalizado':
         return 'bg-pink-100 text-[#ac2471] border-pink-200 font-bold';
     }
@@ -657,7 +660,7 @@ export const PedidosView: React.FC<PedidosViewProps> = ({
 
       {/* ================= VIEW 2: KANBAN BOARD ================= */}
       {viewMode === 'kanban' && (
-        <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-6 gap-4 items-start">
+        <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-7 gap-4 items-start">
           {allStatuses.map((status) => {
             const isFinalizedColumn = status === 'Finalizado';
             

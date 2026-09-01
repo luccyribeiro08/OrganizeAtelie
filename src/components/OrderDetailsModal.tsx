@@ -76,6 +76,7 @@ export const OrderDetailsModal: React.FC<OrderDetailsModalProps> = ({
     'Arte Aprovada',
     'Em Produção',
     'Pronto p/ Envio',
+    'Enviado',
     'Finalizado'
   ];
 

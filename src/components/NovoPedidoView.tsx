@@ -969,17 +969,19 @@ export const NovoPedidoView: React.FC<NovoPedidoViewProps> = ({
                         />
                       </div>
 
-                      {/* Unit Price (Read-only: editable strictly in Catalog) */}
+                      {/* Unit Price (Editable with dot, comma and cents) */}
                       <div className="sm:col-span-2">
                         <label className="block text-[9px] font-bold text-slate-400 uppercase text-right mb-1">
                           Valor Un.
                         </label>
-                        <div
-                          className="w-full px-2.5 py-1.5 bg-pink-50/50 border border-pink-100/80 rounded-lg text-xs font-bold text-slate-700 text-right select-none"
-                          title="Valor unitário definido no Catálogo de Produtos"
-                        >
-                          {formatCurrency(item.unitPrice || 0)}
-                        </div>
+                        <DecimalInput
+                          value={item.unitPrice}
+                          onChangeValue={(val) => handleUpdateItem(idx, 'unitPrice', val)}
+                          prefix="R$"
+                          placeholder="0,00"
+                          className="w-full px-2 py-1.5 bg-white border border-pink-200 rounded-lg text-xs font-bold text-slate-800 text-right focus:outline-hidden focus:ring-2 focus:ring-[#ac2471]/20 focus:border-[#ac2471]"
+                          title="Valor unitário do item (aceita centavos, ponto e vírgula)"
+                        />
                       </div>
 
                       {/* Subtotal & Delete */}

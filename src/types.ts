@@ -4,6 +4,7 @@ export type OrderStatus =
   | 'Arte Aprovada' 
   | 'Em Produção' 
   | 'Pronto p/ Envio' 
+  | 'Enviado' 
   | 'Finalizado';
 
 export type PaymentMethod = 

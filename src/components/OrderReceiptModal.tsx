@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { CheckCircle2, Download, Loader2, MessageCircle, Printer, Sparkles, X } from 'lucide-react';
+import { toBlob, toPng } from 'html-to-image';
 import html2canvas from 'html2canvas';
 import { AtelieProfile, Order } from '../types';
 import { createWhatsAppLink, formatCurrency, formatDate } from '../utils/helpers';
@@ -25,6 +26,54 @@ export const OrderReceiptModal: React.FC<OrderReceiptModalProps> = ({
     window.print();
   };
 
+  const generateReceiptBlob = async (element: HTMLElement): Promise<Blob | null> => {
+    // Tier 1: Try html-to-image toBlob
+    try {
+      const blob = await toBlob(element, {
+        quality: 0.95,
+        pixelRatio: 2,
+        backgroundColor: '#ffffff',
+        cacheBust: true,
+      });
+      if (blob) return blob;
+    } catch (e1) {
+      console.warn('html-to-image toBlob falhou, tentando toPng dataUrl...', e1);
+    }
+
+    // Tier 2: Try html-to-image toPng dataUrl
+    try {
+      const dataUrl = await toPng(element, {
+        quality: 0.95,
+        pixelRatio: 2,
+        backgroundColor: '#ffffff',
+        cacheBust: true,
+      });
+      if (dataUrl) {
+        const res = await fetch(dataUrl);
+        const blob = await res.blob();
+        if (blob) return blob;
+      }
+    } catch (e2) {
+      console.warn('html-to-image toPng falhou, tentando html2canvas...', e2);
+    }
+
+    // Tier 3: Try html2canvas fallback
+    try {
+      const canvas = await html2canvas(element, {
+        scale: 2,
+        useCORS: true,
+        allowTaint: true,
+        backgroundColor: '#ffffff',
+        logging: false,
+      });
+      return await new Promise<Blob | null>((resolve) => canvas.toBlob(resolve, 'image/png'));
+    } catch (e3) {
+      console.warn('html2canvas falhou...', e3);
+    }
+
+    return null;
+  };
+
   const handleSendWhatsAppPNG = async () => {
     const printableElement = document.getElementById('printable-order');
     if (!printableElement) return;
@@ -33,12 +82,7 @@ export const OrderReceiptModal: React.FC<OrderReceiptModalProps> = ({
       setIsGeneratingPng(true);
       setFeedbackMsg('Gerando recibo em imagem PNG...');
 
-      const canvas = await html2canvas(printableElement, {
-        scale: 2,
-        useCORS: true,
-        backgroundColor: '#ffffff',
-        logging: false,
-      });
+      const blob = await generateReceiptBlob(printableElement);
 
       const cleanCode = (order.code || 'PED').replace(/[^a-zA-Z0-9]/g, '');
       const cleanName = (order.clientName || 'Cliente').replace(/\s+/g, '_');
@@ -61,13 +105,7 @@ export const OrderReceiptModal: React.FC<OrderReceiptModalProps> = ({
 
       const waLink = createWhatsAppLink(order.clientPhone, waMessage);
 
-      canvas.toBlob(async (blob) => {
-        if (!blob) {
-          setIsGeneratingPng(false);
-          setFeedbackMsg(null);
-          return;
-        }
-
+      if (blob) {
         const pngFile = new File([blob], fileName, { type: 'image/png' });
 
         // Try Web Share API (iPad, iPhone, Android)
@@ -88,6 +126,7 @@ export const OrderReceiptModal: React.FC<OrderReceiptModalProps> = ({
               setFeedbackMsg(null);
               return;
             }
+            console.warn('navigator.share falhou:', err);
           }
         }
 
@@ -112,7 +151,7 @@ export const OrderReceiptModal: React.FC<OrderReceiptModalProps> = ({
         document.body.appendChild(a);
         a.click();
         document.body.removeChild(a);
-        URL.revokeObjectURL(url);
+        setTimeout(() => URL.revokeObjectURL(url), 1000);
 
         // Open WhatsApp
         window.open(waLink, '_blank');
@@ -120,11 +159,19 @@ export const OrderReceiptModal: React.FC<OrderReceiptModalProps> = ({
         setIsGeneratingPng(false);
         setFeedbackMsg('Recibo PNG baixado! Abrindo conversa no WhatsApp...');
         setTimeout(() => setFeedbackMsg(null), 4000);
-      }, 'image/png');
+      } else {
+        // Fallback if canvas rendering could not produce blob: still open WhatsApp with text receipt
+        window.open(waLink, '_blank');
+        setIsGeneratingPng(false);
+        setFeedbackMsg('Abrindo WhatsApp com os dados do pedido...');
+        setTimeout(() => setFeedbackMsg(null), 3500);
+      }
     } catch (err) {
-      console.error('Erro ao gerar recibo em PNG:', err);
+      console.error('Erro ao processar recibo:', err);
       setIsGeneratingPng(false);
-      setFeedbackMsg('Erro ao gerar imagem. Tente novamente.');
+      const waMessage = `Olá, *${order.clientName}*! Segue o recibo do seu Pedido (${order.code}) do ${profile.name}.`;
+      window.open(createWhatsAppLink(order.clientPhone, waMessage), '_blank');
+      setFeedbackMsg('Abrindo WhatsApp da cliente...');
       setTimeout(() => setFeedbackMsg(null), 3500);
     }
   };

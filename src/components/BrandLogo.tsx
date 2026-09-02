@@ -34,7 +34,11 @@ export const BrandLogo: React.FC<BrandLogoProps> = ({
           src={logoSrc}
           alt="Logo Organize Ateliê"
           className={`${sizeClasses} object-cover ring-2 ring-pink-200/90 shadow-sm bg-pink-50`}
+          crossOrigin="anonymous"
           referrerPolicy="no-referrer"
+          onError={(e) => {
+            (e.currentTarget as HTMLImageElement).src = DEFAULT_LOGO_URL;
+          }}
         />
         <div className="absolute -bottom-0.5 -right-0.5 w-4 h-4 bg-[#ac2471] rounded-full border-2 border-white flex items-center justify-center shadow-xs">
           <span className="text-[8px] text-white font-bold">✨</span>

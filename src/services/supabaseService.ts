@@ -11,7 +11,16 @@ export const supabaseService = {
         .eq('id', userId)
         .single();
       if (error || !data) return null;
+
+      // Default trial to 7 days from creation if not set
+      let trialEnds = data.trial_ends_at;
+      if (!trialEnds) {
+        const createdDate = data.created_at ? new Date(data.created_at) : new Date();
+        trialEnds = new Date(createdDate.getTime() + 7 * 24 * 60 * 60 * 1000).toISOString();
+      }
+
       return {
+        id: data.id,
         name: data.atelie_name || data.name,
         ownerName: data.name,
         role: data.role || 'Artesã Responsável',
@@ -23,6 +32,19 @@ export const supabaseService = {
         address: data.address || '',
         logoUrl: data.logo_url || data.avatar_url || '',
         avatarUrl: data.avatar_url || data.logo_url || '',
+        trialEndsAt: trialEnds,
+        subscriptionStatus: data.subscription_status || 'trial',
+        subscriptionPlan: data.subscription_plan || 'free_trial',
+        subscriptionExpiresAt: data.subscription_expires_at || undefined,
+        isAdmin: data.is_admin || (data.email && (data.email.toLowerCase().includes('marcio') || data.email.toLowerCase().includes('luccy'))),
+        mercadoPagoLinks: data.mercado_pago_links || {
+          mensal: '',
+          trimestral: '',
+          anual: '',
+          pixKey: '',
+          whatsappAdmin: ''
+        },
+        createdAt: data.created_at,
       };
     } catch (e) {
       console.error('Error fetching profile from Supabase', e);
@@ -45,6 +67,12 @@ export const supabaseService = {
         address: profile.address,
         logo_url: profile.logoUrl,
         avatar_url: profile.avatarUrl,
+        trial_ends_at: profile.trialEndsAt,
+        subscription_status: profile.subscriptionStatus || 'trial',
+        subscription_plan: profile.subscriptionPlan || 'free_trial',
+        subscription_expires_at: profile.subscriptionExpiresAt,
+        is_admin: profile.isAdmin,
+        mercado_pago_links: profile.mercadoPagoLinks,
         updated_at: new Date().toISOString(),
       });
       return !error;
@@ -407,6 +435,89 @@ export const supabaseService = {
       return !error;
     } catch (e) {
       console.error('Error deleting client from Supabase', e);
+      return false;
+    }
+  },
+
+  // --- ADMIN METHODS ---
+  async getAllUsersForAdmin(): Promise<AtelieProfile[]> {
+    try {
+      const { data, error } = await supabase
+        .from('profiles')
+        .select('*')
+        .order('created_at', { ascending: false });
+
+      if (error || !data) return [];
+      return data.map((d: any) => ({
+        id: d.id,
+        name: d.atelie_name || d.name,
+        ownerName: d.name,
+        role: d.role || 'Artesã Responsável',
+        slogan: d.slogan || '',
+        phone: d.phone || '',
+        pixKey: d.pix_key || '',
+        instagram: d.instagram || '',
+        email: d.email || '',
+        address: d.address || '',
+        logoUrl: d.logo_url || '',
+        avatarUrl: d.avatar_url || '',
+        trialEndsAt: d.trial_ends_at,
+        subscriptionStatus: d.subscription_status || 'trial',
+        subscriptionPlan: d.subscription_plan || 'free_trial',
+        subscriptionExpiresAt: d.subscription_expires_at,
+        isAdmin: d.is_admin || false,
+        mercadoPagoLinks: d.mercado_pago_links || {},
+        createdAt: d.created_at,
+      }));
+    } catch (e) {
+      console.error('Error fetching all profiles for admin', e);
+      return [];
+    }
+  },
+
+  async updateUserSubscriptionAdmin(
+    targetUserId: string,
+    updates: {
+      subscriptionStatus: 'trial' | 'active' | 'expired' | 'admin';
+      subscriptionPlan: 'free_trial' | 'mensal' | 'trimestral' | 'anual' | 'vitalicio';
+      subscriptionExpiresAt?: string | null;
+      trialEndsAt?: string;
+      isAdmin?: boolean;
+    }
+  ): Promise<boolean> {
+    try {
+      const { error } = await supabase
+        .from('profiles')
+        .update({
+          subscription_status: updates.subscriptionStatus,
+          subscription_plan: updates.subscriptionPlan,
+          subscription_expires_at: updates.subscriptionExpiresAt,
+          trial_ends_at: updates.trialEndsAt,
+          is_admin: updates.isAdmin !== undefined ? updates.isAdmin : false,
+          updated_at: new Date().toISOString(),
+        })
+        .eq('id', targetUserId);
+
+      return !error;
+    } catch (e) {
+      console.error('Error updating user subscription in admin', e);
+      return false;
+    }
+  },
+
+  async saveAdminMercadoPagoLinks(adminUserId: string, links: any): Promise<boolean> {
+    try {
+      const { error } = await supabase
+        .from('profiles')
+        .update({
+          mercado_pago_links: links,
+          updated_at: new Date().toISOString(),
+        })
+        .eq('id', adminUserId);
+
+      return !error;
+    } catch (e) {
+      console.error('Error saving Mercado Pago links', e);
       return false;
     }
   },

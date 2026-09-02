@@ -122,7 +122,19 @@ export interface Quotation {
   updatedAt?: string;
 }
 
+export type SubscriptionStatus = 'trial' | 'active' | 'expired' | 'admin';
+export type SubscriptionPlan = 'free_trial' | 'mensal' | 'trimestral' | 'anual' | 'vitalicio';
+
+export interface MercadoPagoLinks {
+  mensal?: string;
+  trimestral?: string;
+  anual?: string;
+  pixKey?: string;
+  whatsappAdmin?: string;
+}
+
 export interface AtelieProfile {
+  id?: string;
   name: string;
   ownerName: string;
   role: string;
@@ -134,6 +146,14 @@ export interface AtelieProfile {
   address: string;
   logoUrl: string;
   avatarUrl: string;
+  // SaaS Subscription & 7-Day Trial fields
+  trialEndsAt?: string;
+  subscriptionStatus?: SubscriptionStatus;
+  subscriptionPlan?: SubscriptionPlan;
+  subscriptionExpiresAt?: string;
+  isAdmin?: boolean;
+  mercadoPagoLinks?: MercadoPagoLinks;
+  createdAt?: string;
 }
 
 export interface UserAccount {
@@ -141,12 +161,17 @@ export interface UserAccount {
   name: string; // Nome da responsável
   atelieName: string; // Nome do ateliê
   email: string;
-  password: string;
+  password?: string;
   phone?: string;
   role?: string;
   avatarUrl?: string;
   logoUrl?: string;
   createdAt: string;
+  trialEndsAt?: string;
+  subscriptionStatus?: SubscriptionStatus;
+  subscriptionPlan?: SubscriptionPlan;
+  subscriptionExpiresAt?: string;
+  isAdmin?: boolean;
 }
 
 export interface Client {
@@ -175,4 +200,6 @@ export type ActiveTab =
   | 'catalogo'
   | 'orcamento'
   | 'agenda'
-  | 'configuracoes';
+  | 'configuracoes'
+  | 'admin-usuarios';
+

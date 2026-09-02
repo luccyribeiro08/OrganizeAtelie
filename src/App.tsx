@@ -14,6 +14,9 @@ import { OrderReadyNotificationModal } from './components/OrderReadyNotification
 import { OrderCompletedNotificationModal } from './components/OrderCompletedNotificationModal';
 import { OrderInProductionNotificationModal } from './components/OrderInProductionNotificationModal';
 import { AuthView } from './components/AuthView';
+import { SubscriptionBanner } from './components/SubscriptionBanner';
+import { SubscriptionModal } from './components/SubscriptionModal';
+import { AdminUsersView } from './components/AdminUsersView';
 import { ActiveTab, AtelieProfile, CatalogItem, Client, Order, OrderStatus, Quotation, UserAccount } from './types';
 import {
   DEFAULT_CATALOG_CATEGORIES,
@@ -25,6 +28,7 @@ import {
   INITIAL_QUOTATIONS
 } from './data/initialData';
 import { getDaysRemaining, triggerConfetti } from './utils/helpers';
+import { getSubscriptionInfo } from './utils/subscriptionUtils';
 import { supabase } from './lib/supabaseClient';
 import { supabaseService } from './services/supabaseService';
 
@@ -296,6 +300,7 @@ export default function App() {
   const [orderInProductionForNotification, setOrderInProductionForNotification] = useState<Order | null>(null);
   const [orderReadyForNotification, setOrderReadyForNotification] = useState<Order | null>(null);
   const [orderCompletedForNotification, setOrderCompletedForNotification] = useState<Order | null>(null);
+  const [isSubscriptionModalOpen, setIsSubscriptionModalOpen] = useState(false);
 
   // Persist registered users
   useEffect(() => {
@@ -560,8 +565,16 @@ export default function App() {
     }
   };
 
+  // Subscription Info
+  const subInfo = getSubscriptionInfo(profile);
+
   // Handler: Save New or Edited Order
   const handleSaveOrder = (savedOrder: Order) => {
+    if (!subInfo.canPerformAction) {
+      setIsSubscriptionModalOpen(true);
+      return;
+    }
+
     setOrders((prev) => {
       const exists = prev.some((o) => o.id === savedOrder.id);
       const updated = exists
@@ -586,6 +599,11 @@ export default function App() {
 
   // Handler: Start Editing an Order (only for non-finalized orders)
   const handleEditOrder = (orderToEdit: Order) => {
+    if (!subInfo.canPerformAction) {
+      setIsSubscriptionModalOpen(true);
+      return;
+    }
+
     if (orderToEdit.status === 'Finalizado') {
       alert('Pedidos já finalizados não podem ser alterados.');
       return;
@@ -597,6 +615,10 @@ export default function App() {
 
   // Handler: Update Order Status (Immediate persistence to local & cloud)
   const handleUpdateStatus = (orderId: string, status: OrderStatus) => {
+    if (!subInfo.canPerformAction) {
+      setIsSubscriptionModalOpen(true);
+      return;
+    }
     setOrders((prev) => {
       const target = prev.find((o) => o.id === orderId);
       if (!target) return prev;
@@ -709,6 +731,10 @@ export default function App() {
 
   // --- CLIENT HANDLERS ---
   const handleAddClient = (newClient: Client) => {
+    if (!subInfo.canPerformAction) {
+      setIsSubscriptionModalOpen(true);
+      return;
+    }
     setClients((prev) => {
       const updated = [newClient, ...prev];
       if (currentUser) {
@@ -726,6 +752,10 @@ export default function App() {
   };
 
   const handleUpdateClient = (client: Client) => {
+    if (!subInfo.canPerformAction) {
+      setIsSubscriptionModalOpen(true);
+      return;
+    }
     setClients((prev) => {
       const updated = prev.map((c) => (c.id === client.id ? client : c));
       if (currentUser) {
@@ -743,6 +773,10 @@ export default function App() {
   };
 
   const handleDeleteClient = (clientId: string) => {
+    if (!subInfo.canPerformAction) {
+      setIsSubscriptionModalOpen(true);
+      return;
+    }
     setClients((prev) => {
       const updated = prev.filter((c) => c.id !== clientId);
       if (currentUser) {
@@ -760,6 +794,10 @@ export default function App() {
   };
 
   const handleSelectClientForOrder = (client: Client) => {
+    if (!subInfo.canPerformAction) {
+      setIsSubscriptionModalOpen(true);
+      return;
+    }
     const fullAddress = [
       client.address,
       client.city ? `${client.city}/${client.state || 'SP'}` : '',
@@ -789,6 +827,10 @@ export default function App() {
 
   // Handler: Add Catalog Item
   const handleAddCatalogItem = (item: CatalogItem) => {
+    if (!subInfo.canPerformAction) {
+      setIsSubscriptionModalOpen(true);
+      return;
+    }
     setCatalog((prev) => {
       const updated = [item, ...prev];
       if (currentUser) {
@@ -807,6 +849,10 @@ export default function App() {
 
   // Handler: Update Catalog Item
   const handleUpdateCatalogItem = (item: CatalogItem) => {
+    if (!subInfo.canPerformAction) {
+      setIsSubscriptionModalOpen(true);
+      return;
+    }
     setCatalog((prev) => {
       const updated = prev.map((c) => (c.id === item.id ? item : c));
       if (currentUser) {
@@ -825,6 +871,10 @@ export default function App() {
 
   // Handler: Delete Catalog Item
   const handleDeleteCatalogItem = (itemId: string) => {
+    if (!subInfo.canPerformAction) {
+      setIsSubscriptionModalOpen(true);
+      return;
+    }
     setCatalog((prev) => {
       const updated = prev.filter((c) => c.id !== itemId);
       if (currentUser) {
@@ -930,6 +980,10 @@ export default function App() {
 
   // Handler: Save Quotation (Pendente/Aprovado/Recusado)
   const handleSaveQuotation = (quote: Quotation) => {
+    if (!subInfo.canPerformAction) {
+      setIsSubscriptionModalOpen(true);
+      return;
+    }
     setQuotations((prev) => {
       const exists = prev.some((q) => q.id === quote.id);
       const updated = exists ? prev.map((q) => (q.id === quote.id ? quote : q)) : [quote, ...prev];
@@ -949,6 +1003,10 @@ export default function App() {
 
   // Handler: Delete Quotation
   const handleDeleteQuotation = (quoteId: string) => {
+    if (!subInfo.canPerformAction) {
+      setIsSubscriptionModalOpen(true);
+      return;
+    }
     setQuotations((prev) => {
       const updated = prev.filter((q) => q.id !== quoteId);
       if (currentUser) {
@@ -967,6 +1025,10 @@ export default function App() {
 
   // Handler: Approve and Create Order from Quote
   const handleApproveAndCreateOrder = (partialOrder: Partial<Order>, quoteId?: string) => {
+    if (!subInfo.canPerformAction) {
+      setIsSubscriptionModalOpen(true);
+      return;
+    }
     if (quoteId) {
       setQuotations((prev) => {
         const updated = prev.map((q) =>
@@ -1141,10 +1203,21 @@ export default function App() {
         logoUrl={profile.logoUrl}
         atelierName={profile.name}
         onLogout={handleLogout}
+        isAdmin={subInfo.isAdmin}
+        onOpenPlans={() => setIsSubscriptionModalOpen(true)}
+        statusBadgeText={subInfo.statusBadgeText}
+        statusBadgeClass={subInfo.statusBadgeClass}
       />
 
       {/* Main Content Area */}
       <div className="flex-1 flex flex-col min-w-0 lg:pl-64 pb-16 md:pb-0 overflow-x-auto">
+        {/* Subscription & Trial Alert Banner */}
+        <SubscriptionBanner
+          profile={profile}
+          onOpenPlans={() => setIsSubscriptionModalOpen(true)}
+          onOpenAdmin={() => setActiveTab('admin-usuarios')}
+        />
+
         {/* Top Header */}
         <Header
           profile={profile}
@@ -1180,7 +1253,13 @@ export default function App() {
               onPrintOrder={(ord) => setOrderToPrint(ord)}
               onUpdateStatus={handleUpdateStatus}
               onDeleteOrder={handleDeleteOrder}
-              onNavigateToNewOrder={() => setActiveTab('criar-pedido')}
+              onNavigateToNewOrder={() => {
+                if (!subInfo.canPerformAction) {
+                  setIsSubscriptionModalOpen(true);
+                  return;
+                }
+                setActiveTab('criar-pedido');
+              }}
               onNotifyInProduction={(ord) => setOrderInProductionForNotification(ord)}
               onNotifyReady={(ord) => setOrderReadyForNotification(ord)}
               onNotifyCompleted={(ord) => setOrderCompletedForNotification(ord)}
@@ -1234,6 +1313,15 @@ export default function App() {
               onExportData={handleExportData}
               onImportData={handleImportData}
             />
+          )}
+
+          {activeTab === 'admin-usuarios' && subInfo.isAdmin && (
+            <div className="p-4 sm:p-8">
+              <AdminUsersView
+                currentAdminProfile={profile}
+                onProfileUpdated={handleUpdateProfile}
+              />
+            </div>
           )}
         </main>
       </div>
@@ -1290,6 +1378,15 @@ export default function App() {
           onClose={() => setOrderCompletedForNotification(null)}
         />
       )}
+
+      {/* Subscription Paywall & Plans Modal */}
+      <SubscriptionModal
+        isOpen={isSubscriptionModalOpen}
+        onClose={() => setIsSubscriptionModalOpen(false)}
+        profile={profile}
+        adminContactPhone={profile.phone}
+        adminPixKey={profile.pixKey}
+      />
     </div>
   );
 }

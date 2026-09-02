@@ -2,6 +2,7 @@ import React from 'react';
 import {
   CalendarDays,
   Calculator,
+  Crown,
   FolderHeart,
   LogOut,
   PlusCircle,
@@ -26,6 +27,10 @@ interface SidebarProps {
   logoUrl?: string;
   atelierName?: string;
   onLogout?: () => void;
+  isAdmin?: boolean;
+  onOpenPlans?: () => void;
+  statusBadgeText?: string;
+  statusBadgeClass?: string;
 }
 
 export const Sidebar: React.FC<SidebarProps> = ({
@@ -38,7 +43,11 @@ export const Sidebar: React.FC<SidebarProps> = ({
   setIsOpenMobile,
   logoUrl,
   atelierName,
-  onLogout
+  onLogout,
+  isAdmin = false,
+  onOpenPlans,
+  statusBadgeText,
+  statusBadgeClass,
 }) => {
   const menuItems = [
     {
@@ -77,6 +86,16 @@ export const Sidebar: React.FC<SidebarProps> = ({
       badgeColor: 'bg-amber-500 text-white',
     },
   ];
+
+  if (isAdmin) {
+    menuItems.push({
+      id: 'admin-usuarios' as ActiveTab,
+      label: 'Painel Admin',
+      icon: Crown,
+      badge: 'Master',
+      badgeColor: 'bg-purple-700 text-white',
+    });
+  }
 
   const handleNavClick = (tab: ActiveTab) => {
     setActiveTab(tab);
@@ -178,6 +197,23 @@ export const Sidebar: React.FC<SidebarProps> = ({
             >
               <LogOut className="w-4 h-4 text-slate-400" />
               <span>Sair da Conta</span>
+            </button>
+          )}
+
+          {onOpenPlans && (
+            <button
+              onClick={onOpenPlans}
+              className="w-full flex items-center justify-between px-4 py-2.5 rounded-2xl text-xs font-bold text-[#ac2471] bg-pink-50 hover:bg-pink-100/80 border border-pink-200 shadow-2xs transition-all active:scale-95 cursor-pointer"
+            >
+              <div className="flex items-center gap-2">
+                <Crown className="w-4 h-4 text-[#ac2471]" />
+                <span>Planos & Assinatura</span>
+              </div>
+              {statusBadgeText && (
+                <span className={`text-[10px] px-2 py-0.5 rounded-full border ${statusBadgeClass || 'bg-white text-[#ac2471]'}`}>
+                  {statusBadgeText}
+                </span>
+              )}
             </button>
           )}
 

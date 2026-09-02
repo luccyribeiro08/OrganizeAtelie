@@ -25,6 +25,13 @@ CREATE TABLE IF NOT EXISTS public.profiles (
   logo_url TEXT,
   catalog_categories TEXT[] DEFAULT ARRAY['Topos de Bolo', 'Kit Festa', 'Cadernos & Planners', 'Lembrancinhas', 'Papelaria Escolar', 'Papelaria Corporativa']::text[],
   order_types TEXT[] DEFAULT ARRAY['Topo de Bolo & Lembrancinhas', 'Kit Festa Escolar', 'Kit Caixas Cenário Luxo', 'Cadernos & Planners Artesanais', 'Lembrancinhas Maternidade / Batizado', 'Papelaria Corporativa & Tags', 'Convites Interativos', 'Outro Personalizado']::text[],
+  -- Colunas de Assinatura e Teste de 7 Dias
+  trial_ends_at TIMESTAMPTZ DEFAULT (NOW() + INTERVAL '7 days'),
+  subscription_status TEXT DEFAULT 'trial',
+  subscription_plan TEXT DEFAULT 'free_trial',
+  subscription_expires_at TIMESTAMPTZ,
+  is_admin BOOLEAN DEFAULT FALSE,
+  mercado_pago_links JSONB DEFAULT '{"mensal": "", "trimestral": "", "anual": "", "pixKey": "", "whatsappAdmin": ""}'::jsonb,
   created_at TIMESTAMPTZ DEFAULT NOW(),
   updated_at TIMESTAMPTZ DEFAULT NOW()
 );
@@ -51,6 +58,48 @@ BEGIN
     WHERE table_schema = 'public' AND table_name = 'profiles' AND column_name = 'order_types'
   ) THEN
     ALTER TABLE public.profiles ADD COLUMN order_types TEXT[] DEFAULT ARRAY['Topo de Bolo & Lembrancinhas', 'Kit Festa Escolar', 'Kit Caixas Cenário Luxo', 'Cadernos & Planners Artesanais', 'Lembrancinhas Maternidade / Batizado', 'Papelaria Corporativa & Tags', 'Convites Interativos', 'Outro Personalizado']::text[];
+  END IF;
+
+  IF NOT EXISTS (
+    SELECT 1 FROM information_schema.columns 
+    WHERE table_schema = 'public' AND table_name = 'profiles' AND column_name = 'trial_ends_at'
+  ) THEN
+    ALTER TABLE public.profiles ADD COLUMN trial_ends_at TIMESTAMPTZ DEFAULT (NOW() + INTERVAL '7 days');
+  END IF;
+
+  IF NOT EXISTS (
+    SELECT 1 FROM information_schema.columns 
+    WHERE table_schema = 'public' AND table_name = 'profiles' AND column_name = 'subscription_status'
+  ) THEN
+    ALTER TABLE public.profiles ADD COLUMN subscription_status TEXT DEFAULT 'trial';
+  END IF;
+
+  IF NOT EXISTS (
+    SELECT 1 FROM information_schema.columns 
+    WHERE table_schema = 'public' AND table_name = 'profiles' AND column_name = 'subscription_plan'
+  ) THEN
+    ALTER TABLE public.profiles ADD COLUMN subscription_plan TEXT DEFAULT 'free_trial';
+  END IF;
+
+  IF NOT EXISTS (
+    SELECT 1 FROM information_schema.columns 
+    WHERE table_schema = 'public' AND table_name = 'profiles' AND column_name = 'subscription_expires_at'
+  ) THEN
+    ALTER TABLE public.profiles ADD COLUMN subscription_expires_at TIMESTAMPTZ;
+  END IF;
+
+  IF NOT EXISTS (
+    SELECT 1 FROM information_schema.columns 
+    WHERE table_schema = 'public' AND table_name = 'profiles' AND column_name = 'is_admin'
+  ) THEN
+    ALTER TABLE public.profiles ADD COLUMN is_admin BOOLEAN DEFAULT FALSE;
+  END IF;
+
+  IF NOT EXISTS (
+    SELECT 1 FROM information_schema.columns 
+    WHERE table_schema = 'public' AND table_name = 'profiles' AND column_name = 'mercado_pago_links'
+  ) THEN
+    ALTER TABLE public.profiles ADD COLUMN mercado_pago_links JSONB DEFAULT '{"mensal": "", "trimestral": "", "anual": "", "pixKey": "", "whatsappAdmin": ""}'::jsonb;
   END IF;
 END $$;
 

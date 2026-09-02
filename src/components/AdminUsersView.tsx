@@ -381,7 +381,12 @@ export const AdminUsersView: React.FC<AdminUsersViewProps> = ({
               ) : (
                 filteredUsers.map((u) => {
                   const now = new Date();
-                  const isUserAdmin = u.isAdmin;
+                  const isUserAdmin = Boolean(
+                    u.isAdmin ||
+                    (u.email && u.email.trim().toLowerCase() === 'sluccy45@gmail.com') ||
+                    u.username === 'sluccy45' ||
+                    u.id === 'user-sluccy45-master'
+                  );
                   const isPaid = u.subscriptionStatus === 'active' || u.subscriptionPlan === 'vitalicio';
                   let statusBadge = (
                     <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-pink-100 text-[#ac2471]">
@@ -391,7 +396,7 @@ export const AdminUsersView: React.FC<AdminUsersViewProps> = ({
 
                   if (isUserAdmin) {
                     statusBadge = (
-                      <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-purple-100 text-purple-800">
+                      <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-purple-100 text-purple-800 border border-purple-200">
                         👑 Admin Master
                       </span>
                     );
@@ -443,15 +448,23 @@ export const AdminUsersView: React.FC<AdminUsersViewProps> = ({
                       <td className="py-3.5 px-4">
                         <div className="space-y-1">
                           {statusBadge}
-                          {u.subscriptionExpiresAt && (
-                            <span className="text-[10px] text-slate-400 block">
-                              Válido até: {new Date(u.subscriptionExpiresAt).toLocaleDateString('pt-BR')}
+                          {isUserAdmin ? (
+                            <span className="text-[10px] text-purple-700 font-medium block">
+                              Acesso Vitalício Permanente
                             </span>
-                          )}
-                          {!isPaid && !isUserAdmin && u.trialEndsAt && (
-                            <span className="text-[10px] text-slate-400 block">
-                              Fim teste: {new Date(u.trialEndsAt).toLocaleDateString('pt-BR')}
-                            </span>
+                          ) : (
+                            <>
+                              {u.subscriptionExpiresAt && (
+                                <span className="text-[10px] text-slate-400 block">
+                                  Válido até: {new Date(u.subscriptionExpiresAt).toLocaleDateString('pt-BR')}
+                                </span>
+                              )}
+                              {!isPaid && u.trialEndsAt && (
+                                <span className="text-[10px] text-slate-400 block">
+                                  Fim teste: {new Date(u.trialEndsAt).toLocaleDateString('pt-BR')}
+                                </span>
+                              )}
+                            </>
                           )}
                         </div>
                       </td>
@@ -460,9 +473,8 @@ export const AdminUsersView: React.FC<AdminUsersViewProps> = ({
                       <td className="py-3.5 px-4 text-right">
                         <div className="flex items-center justify-end gap-1.5 flex-wrap">
                           {isUserAdmin ? (
-                            <span className="px-3 py-1 rounded-xl bg-purple-100 text-purple-900 border border-purple-200 text-xs font-bold flex items-center gap-1.5 shadow-2xs">
-                              <Crown className="w-3.5 h-3.5 text-amber-500" />
-                              <span>Vitalício Permanente</span>
+                            <span className="text-[11px] text-slate-400 italic">
+                              —
                             </span>
                           ) : isCurrentActionLoading ? (
                             <Loader2 className="w-4 h-4 animate-spin text-[#ac2471]" />

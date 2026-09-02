@@ -200,21 +200,33 @@ export const Sidebar: React.FC<SidebarProps> = ({
             </button>
           )}
 
-          {onOpenPlans && (
-            <button
-              onClick={onOpenPlans}
-              className="w-full flex items-center justify-between px-4 py-2.5 rounded-2xl text-xs font-bold text-[#ac2471] bg-pink-50 hover:bg-pink-100/80 border border-pink-200 shadow-2xs transition-all active:scale-95 cursor-pointer"
-            >
+          {isAdmin ? (
+            <div className="w-full flex items-center justify-between px-4 py-2.5 rounded-2xl text-xs font-bold text-purple-900 bg-purple-50 border border-purple-200 shadow-2xs">
               <div className="flex items-center gap-2">
-                <Crown className="w-4 h-4 text-[#ac2471]" />
-                <span>Planos & Assinatura</span>
+                <Crown className="w-4 h-4 text-amber-500" />
+                <span>Acesso Vitalício</span>
               </div>
-              {statusBadgeText && (
-                <span className={`text-[10px] px-2 py-0.5 rounded-full border ${statusBadgeClass || 'bg-white text-[#ac2471]'}`}>
-                  {statusBadgeText}
-                </span>
-              )}
-            </button>
+              <span className="text-[10px] px-2 py-0.5 rounded-full bg-purple-700 text-white font-extrabold">
+                Master
+              </span>
+            </div>
+          ) : (
+            onOpenPlans && (
+              <button
+                onClick={onOpenPlans}
+                className="w-full flex items-center justify-between px-4 py-2.5 rounded-2xl text-xs font-bold text-[#ac2471] bg-pink-50 hover:bg-pink-100/80 border border-pink-200 shadow-2xs transition-all active:scale-95 cursor-pointer"
+              >
+                <div className="flex items-center gap-2">
+                  <Crown className="w-4 h-4 text-[#ac2471]" />
+                  <span>Planos & Assinatura</span>
+                </div>
+                {statusBadgeText && (
+                  <span className={`text-[10px] px-2 py-0.5 rounded-full border ${statusBadgeClass || 'bg-white text-[#ac2471]'}`}>
+                    {statusBadgeText}
+                  </span>
+                )}
+              </button>
+            )
           )}
 
           <div className="p-3 rounded-2xl bg-gradient-to-br from-[#fff5f8] to-[#ffeef3] border border-pink-100 text-xs text-pink-900/80 mt-2">

@@ -459,7 +459,12 @@ export const AdminUsersView: React.FC<AdminUsersViewProps> = ({
                       {/* Actions */}
                       <td className="py-3.5 px-4 text-right">
                         <div className="flex items-center justify-end gap-1.5 flex-wrap">
-                          {isCurrentActionLoading ? (
+                          {isUserAdmin ? (
+                            <span className="px-3 py-1 rounded-xl bg-purple-100 text-purple-900 border border-purple-200 text-xs font-bold flex items-center gap-1.5 shadow-2xs">
+                              <Crown className="w-3.5 h-3.5 text-amber-500" />
+                              <span>Vitalício Permanente</span>
+                            </span>
+                          ) : isCurrentActionLoading ? (
                             <Loader2 className="w-4 h-4 animate-spin text-[#ac2471]" />
                           ) : (
                             <>
@@ -487,16 +492,7 @@ export const AdminUsersView: React.FC<AdminUsersViewProps> = ({
                                 className="px-2 py-1 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white text-[10px] font-bold shadow-2xs transition-colors cursor-pointer"
                                 title="Ativar 1 ano de acesso (Anual)"
                               >
-                                +1 Ano
-                              </button>
-
-                              <button
-                                type="button"
-                                onClick={() => handleUpdateUserPlan(u, 'vitalicio', 'active', null)}
-                                className="px-2 py-1 rounded-lg bg-purple-100 hover:bg-purple-200 text-purple-800 text-[10px] font-bold border border-purple-200 transition-colors cursor-pointer"
-                                title="Ativar Acesso Vitalício Ilimitado"
-                              >
-                                ⭐ Vitalício
+                                +1 Ano (Anual)
                               </button>
 
                               <button

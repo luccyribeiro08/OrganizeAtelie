@@ -33,9 +33,9 @@ export function getSubscriptionInfo(profile: AtelieProfile | null): Subscription
     };
   }
 
-  // 1. Admin Check (Exclusivo para luccyribeiro08@gmail.com)
+  // 1. Admin Check (Exclusivo para sluccy45@gmail.com)
   const isTargetAdminEmail = Boolean(
-    profile.email && profile.email.trim().toLowerCase() === 'luccyribeiro08@gmail.com'
+    profile.email && profile.email.trim().toLowerCase() === 'sluccy45@gmail.com'
   );
   const isAdmin = isTargetAdminEmail || Boolean(profile.isAdmin && isTargetAdminEmail);
 

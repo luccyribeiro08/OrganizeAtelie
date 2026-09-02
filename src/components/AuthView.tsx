@@ -84,20 +84,19 @@ export const AuthView: React.FC<AuthViewProps> = ({
     const cleanInput = loginIdentifier.trim().toLowerCase().replace(/^@/, '');
     setLoading(true);
 
-    // 1. Acesso Imediato Garantido para Administradora Master (luccyribeiro08@gmail.com)
+    // 1. Acesso Imediato Garantido para Administradora Master (sluccy45@gmail.com)
     if (
-      cleanInput === 'luccyribeiro08@gmail.com' ||
-      cleanInput === 'luccyatelie' ||
-      cleanInput === 'luccy' ||
-      cleanInput.includes('luccyribeiro')
+      cleanInput === 'sluccy45@gmail.com' ||
+      cleanInput === 'sluccy45' ||
+      cleanInput === 'sluccy'
     ) {
       const masterUser: UserAccount = {
-        id: 'user-luccy-master',
+        id: 'user-sluccy45-master',
         name: 'Luccy Ribeiro',
         atelieName: 'Organize Ateliê - Luccy Ribeiro',
-        username: 'luccyatelie',
-        email: 'luccyribeiro08@gmail.com',
-        password: loginPassword || '123456',
+        username: 'sluccy45',
+        email: 'sluccy45@gmail.com',
+        password: loginPassword || 'P@ris1303',
         phone: '(11) 98765-4321',
         role: 'Administrador Master',
         avatarUrl: '/logo.png',
@@ -110,7 +109,7 @@ export const AuthView: React.FC<AuthViewProps> = ({
 
       // Tenta autenticar/sincronizar silenciosamente no Supabase
       supabase.auth.signInWithPassword({
-        email: 'luccyribeiro08@gmail.com',
+        email: 'sluccy45@gmail.com',
         password: loginPassword,
       }).then(({ data: authData }) => {
         if (authData?.user) {
@@ -215,35 +214,7 @@ export const AuthView: React.FC<AuthViewProps> = ({
       console.log('Supabase login check', supaErr);
     }
 
-    // 2. Fallback to Master Admin Account (luccyribeiro08@gmail.com)
-    if (
-      cleanInput === 'luccyribeiro08@gmail.com' ||
-      cleanInput === 'luccyatelie' ||
-      cleanInput === 'luccy'
-    ) {
-      const masterUser: UserAccount = {
-        id: 'user-luccy-master',
-        name: 'Luccy Ribeiro',
-        atelieName: 'Organize Ateliê - Luccy Ribeiro',
-        username: 'luccyatelie',
-        email: 'luccyribeiro08@gmail.com',
-        password: loginPassword || '1234',
-        phone: '(11) 98765-4321',
-        role: 'Administrador Master',
-        avatarUrl: '/logo.png',
-        logoUrl: '/logo.png',
-        createdAt: '2026-01-01T00:00:00Z',
-        isAdmin: true,
-        subscriptionStatus: 'active',
-        subscriptionPlan: 'vitalicio',
-      };
-      triggerConfetti();
-      onLoginSuccess(masterUser);
-      setLoading(false);
-      return;
-    }
-
-    // 3. Fallback to registered local users
+    // 2. Fallback to registered local users
     const localUser = registeredUsers.find(
       (u) =>
         u.email.toLowerCase() === cleanInput ||

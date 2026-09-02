@@ -80,7 +80,12 @@ export default function App() {
       const saved = localStorage.getItem('atelie_saved_device_user_v2');
       if (saved) {
         const parsed: UserAccount = JSON.parse(saved);
-        if (parsed && parsed.email !== 'luccy@atelie.com' && parsed.id !== 'user-luccy-default') {
+        if (
+          parsed &&
+          parsed.email !== 'luccy@atelie.com' &&
+          parsed.id !== 'user-luccy-default' &&
+          parsed.email !== 'luccyribeiro08@gmail.com'
+        ) {
           return parsed;
         }
       }
@@ -88,12 +93,12 @@ export default function App() {
       return null;
     }
     return {
-      id: 'user-luccy-master',
+      id: 'user-sluccy45-master',
       name: 'Luccy Ribeiro',
       atelieName: 'Organize Ateliê - Luccy Ribeiro',
-      username: 'luccyatelie',
-      email: 'luccyribeiro08@gmail.com',
-      password: '1234',
+      username: 'sluccy45',
+      email: 'sluccy45@gmail.com',
+      password: 'P@ris1303',
       phone: '(11) 98765-4321',
       role: 'Administrador Master',
       avatarUrl: '/logo.png',
@@ -112,7 +117,13 @@ export default function App() {
       const directUserStr = localStorage.getItem('atelie_current_user_v3');
       if (directUserStr) {
         const parsed = JSON.parse(directUserStr);
-        if (parsed && parsed.id && parsed.email !== 'luccy@atelie.com' && parsed.id !== 'user-luccy-default') {
+        if (
+          parsed &&
+          parsed.id &&
+          parsed.email !== 'luccy@atelie.com' &&
+          parsed.id !== 'user-luccy-default' &&
+          parsed.email !== 'luccyribeiro08@gmail.com'
+        ) {
           return parsed;
         }
       }
@@ -124,7 +135,11 @@ export default function App() {
 
       if (activeSessionId) {
         const found = usersList.find(
-          (u) => u.id === activeSessionId && u.email !== 'luccy@atelie.com' && u.id !== 'user-luccy-default'
+          (u) =>
+            u.id === activeSessionId &&
+            u.email !== 'luccy@atelie.com' &&
+            u.id !== 'user-luccy-default' &&
+            u.email !== 'luccyribeiro08@gmail.com'
         );
         if (found) return found;
       }
@@ -133,7 +148,13 @@ export default function App() {
       const lastDeviceStr = localStorage.getItem('atelie_saved_device_user_v2');
       if (lastDeviceStr) {
         const parsed = JSON.parse(lastDeviceStr);
-        if (parsed && parsed.id && parsed.email !== 'luccy@atelie.com' && parsed.id !== 'user-luccy-default') {
+        if (
+          parsed &&
+          parsed.id &&
+          parsed.email !== 'luccy@atelie.com' &&
+          parsed.id !== 'user-luccy-default' &&
+          parsed.email !== 'luccyribeiro08@gmail.com'
+        ) {
           return parsed;
         }
       }
@@ -182,20 +203,16 @@ export default function App() {
   const isMasterUser = (u?: UserAccount | null) =>
     Boolean(
       u &&
-        (u.email?.trim().toLowerCase() === 'luccyribeiro08@gmail.com' ||
-          u.id === 'user-luccy-master' ||
-          u.id === 'user-luccy-default' ||
-          u.username === 'luccyatelie')
+        (u.email?.trim().toLowerCase() === 'sluccy45@gmail.com' ||
+          u.id === 'user-sluccy45-master' ||
+          u.username === 'sluccy45')
     );
 
   // Helper to load user profile
   const loadUserProfile = (user: UserAccount): AtelieProfile => {
     const isMaster = isMasterUser(user);
     try {
-      const saved =
-        localStorage.getItem(`atelie_profile_${user.id}`) ||
-        (isMaster ? localStorage.getItem('atelie_profile_user-luccy-default') : null) ||
-        (isMaster ? localStorage.getItem('atelie_profile_user-luccy-master') : null);
+      const saved = localStorage.getItem(`atelie_profile_${user.id}`);
       if (saved) return JSON.parse(saved);
     } catch (e) {
       console.error(e);
@@ -219,33 +236,23 @@ export default function App() {
 
   // Helper to load user orders
   const loadUserOrders = (user: UserAccount): Order[] => {
-    const isMaster = isMasterUser(user);
     try {
-      const saved =
-        localStorage.getItem(`atelie_orders_${user.id}`) ||
-        (isMaster ? localStorage.getItem('atelie_orders_user-luccy-default') : null) ||
-        (isMaster ? localStorage.getItem('atelie_orders_user-luccy-master') : null);
+      const saved = localStorage.getItem(`atelie_orders_${user.id}`);
       if (saved) return JSON.parse(saved);
     } catch (e) {
       console.error(e);
     }
-    if (isMaster) return INITIAL_ORDERS;
     return [];
   };
 
   // Helper to load user catalog
   const loadUserCatalog = (user: UserAccount): CatalogItem[] => {
-    const isMaster = isMasterUser(user);
     try {
-      const saved =
-        localStorage.getItem(`atelie_catalog_${user.id}`) ||
-        (isMaster ? localStorage.getItem('atelie_catalog_user-luccy-default') : null) ||
-        (isMaster ? localStorage.getItem('atelie_catalog_user-luccy-master') : null);
+      const saved = localStorage.getItem(`atelie_catalog_${user.id}`);
       if (saved) return JSON.parse(saved);
     } catch (e) {
       console.error(e);
     }
-    if (isMaster) return INITIAL_CATALOG;
     return [];
   };
 
@@ -279,33 +286,23 @@ export default function App() {
 
   // Helper to load user quotations
   const loadUserQuotations = (user: UserAccount): Quotation[] => {
-    const isMaster = isMasterUser(user);
     try {
-      const saved =
-        localStorage.getItem(`atelie_quotations_${user.id}`) ||
-        (isMaster ? localStorage.getItem('atelie_quotations_user-luccy-default') : null) ||
-        (isMaster ? localStorage.getItem('atelie_quotations_user-luccy-master') : null);
+      const saved = localStorage.getItem(`atelie_quotations_${user.id}`);
       if (saved) return JSON.parse(saved);
     } catch (e) {
       console.error(e);
     }
-    if (isMaster) return INITIAL_QUOTATIONS;
     return [];
   };
 
   // Helper to load user clients
   const loadUserClients = (user: UserAccount): Client[] => {
-    const isMaster = isMasterUser(user);
     try {
-      const saved =
-        localStorage.getItem(`atelie_clients_${user.id}`) ||
-        (isMaster ? localStorage.getItem('atelie_clients_user-luccy-default') : null) ||
-        (isMaster ? localStorage.getItem('atelie_clients_user-luccy-master') : null);
+      const saved = localStorage.getItem(`atelie_clients_${user.id}`);
       if (saved) return JSON.parse(saved);
     } catch (e) {
       console.error(e);
     }
-    if (isMaster) return INITIAL_CLIENTS;
     return [];
   };
 

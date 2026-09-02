@@ -22,6 +22,7 @@ import {
   List,
   Lock,
   MessageCircle,
+  Package,
   PackageCheck,
   Plus,
   Printer,
@@ -398,11 +399,12 @@ export const PedidosView: React.FC<PedidosViewProps> = ({
             </div>
           ) : (
             <div className="overflow-x-auto w-full">
-              <table className="w-full min-w-[850px] text-left text-xs text-slate-600">
+              <table className="w-full min-w-[960px] text-left text-xs text-slate-600">
                 <thead className="bg-[#faf7f8] border-b border-pink-100 text-[10px] font-bold text-slate-400 uppercase tracking-wider">
                   <tr>
                     <th className="py-4 px-6">Código / Cliente</th>
                     <th className="py-4 px-4">Tema & Tipo</th>
+                    <th className="py-4 px-4">Itens & Produtos</th>
                     <th className="py-4 px-4">Origem</th>
                     <th className="py-4 px-4">Entrega</th>
                     <th className="py-4 px-4">Status</th>
@@ -413,6 +415,8 @@ export const PedidosView: React.FC<PedidosViewProps> = ({
                 <tbody className="divide-y divide-pink-50">
                   {filteredOrders.map((order) => {
                     const days = getDaysRemaining(order.deliveryDate);
+                    const totalUnits = (order.items || []).reduce((acc, it) => acc + (it.quantity || 1), 0);
+                    const totalProductTypes = (order.items || []).length;
                     const waMessage = generateWhatsAppOrderMessage(
                       order,
                       profile?.ownerName,
@@ -470,8 +474,29 @@ export const PedidosView: React.FC<PedidosViewProps> = ({
                               {order.theme}
                             </span>
                             <span className="text-[11px] text-pink-700 font-medium block">
-                              {order.orderType} • {order.items.length} itens
+                              {order.orderType}
                             </span>
+                          </div>
+                        </td>
+
+                        {/* Itens & Produtos / Quantidade */}
+                        <td className="py-4 px-4">
+                          <div className="space-y-1">
+                            <div className="flex items-center gap-1.5 flex-wrap">
+                              <span className="inline-flex items-center gap-1 text-[11px] font-bold px-2.5 py-0.5 rounded-lg bg-pink-50 text-[#ac2471] border border-pink-100/90 shadow-2xs">
+                                <Package className="w-3.5 h-3.5 text-[#ac2471]" />
+                                <span>{totalUnits} {totalUnits === 1 ? 'unidade' : 'unidades'}</span>
+                              </span>
+                              <span className="text-[10px] text-slate-500 font-medium">
+                                ({totalProductTypes} {totalProductTypes === 1 ? 'produto' : 'produtos'})
+                              </span>
+                            </div>
+                            <p
+                              className="text-[11px] text-slate-600 line-clamp-1 max-w-[220px]"
+                              title={(order.items || []).map((i) => `${i.quantity}x ${i.name}`).join(', ')}
+                            >
+                              {(order.items || []).map((i) => `${i.quantity}x ${i.name}`).join(', ')}
+                            </p>
                           </div>
                         </td>
 
@@ -781,8 +806,14 @@ export const PedidosView: React.FC<PedidosViewProps> = ({
                               {order.clientName}
                             </h4>
                             <p className="text-[11px] text-pink-700 font-medium line-clamp-1">
-                              Tema: {order.theme}
+                              Tema: {order.theme} • {order.orderType}
                             </p>
+                            <div className="flex items-center gap-1.5 mt-1.5 text-[11px] text-slate-600 font-semibold bg-pink-50/70 px-2 py-1 rounded-lg border border-pink-100/70">
+                              <Package className="w-3.5 h-3.5 text-[#ac2471] flex-shrink-0" />
+                              <span className="truncate">
+                                {(order.items || []).reduce((acc, it) => acc + (it.quantity || 1), 0)} un. ({(order.items || []).length} {(order.items || []).length === 1 ? 'produto' : 'produtos'})
+                              </span>
+                            </div>
                           </div>
 
                           {order.mockupImages && order.mockupImages.length > 0 && (

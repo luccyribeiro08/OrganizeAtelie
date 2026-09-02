@@ -77,8 +77,22 @@ export default function App() {
   // Single Saved Account on Device (null by default to prevent automatic connection)
   const [lastSavedUser, setLastSavedUser] = useState<UserAccount | null>(null);
 
-  // Current Logged In User State - Sempre exige login explícito com usuário e senha
-  const [currentUser, setCurrentUser] = useState<UserAccount | null>(null);
+  // Current Logged In User State - Sessão ativa mantida durante o F5 na mesma aba via sessionStorage.
+  // Em uma nova guia ou ao reabrir o navegador, sempre exigirá usuário e senha.
+  const [currentUser, setCurrentUser] = useState<UserAccount | null>(() => {
+    try {
+      const sessionUserStr = sessionStorage.getItem('atelie_tab_active_user_v1');
+      if (sessionUserStr) {
+        const parsed: UserAccount = JSON.parse(sessionUserStr);
+        if (parsed && parsed.id && parsed.email) {
+          return parsed;
+        }
+      }
+    } catch (e) {
+      console.error('Erro ao ler sessão da aba', e);
+    }
+    return null;
+  });
 
   // Helper to check if user is the Master Admin account
   const isMasterUser = (u?: UserAccount | null) =>
@@ -406,11 +420,21 @@ export default function App() {
 
     setRegisteredUsers((prev) => [...prev, newUser]);
     setCurrentUser(newUser);
+    try {
+      sessionStorage.setItem('atelie_tab_active_user_v1', JSON.stringify(newUser));
+    } catch (e) {
+      console.error(e);
+    }
   };
 
-  // Handle Login Success - In-memory active session (requires credentials on refresh/re-access)
+  // Handle Login Success - Mantém sessão ativa na aba atual (preserva F5)
   const handleLoginSuccess = (user: UserAccount) => {
     setCurrentUser(user);
+    try {
+      sessionStorage.setItem('atelie_tab_active_user_v1', JSON.stringify(user));
+    } catch (e) {
+      console.error(e);
+    }
     setActiveTab('pedidos');
   };
 
@@ -432,8 +456,10 @@ export default function App() {
       console.log('Supabase signOut', e);
     }
     try {
+      sessionStorage.removeItem('atelie_tab_active_user_v1');
       localStorage.removeItem('atelie_current_user_v3');
       localStorage.removeItem('atelie_active_session_id_v2');
+      localStorage.removeItem('atelie_saved_device_user_v2');
     } catch (e) {
       console.error(e);
     }

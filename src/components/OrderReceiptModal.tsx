@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { CheckCircle2, Download, Loader2, MessageCircle, Printer, Sparkles, X } from 'lucide-react';
+import { CheckCircle2, Download, FileText, Loader2, MessageCircle, Printer, Sparkles, X } from 'lucide-react';
 import { toBlob, toPng } from 'html-to-image';
 import html2canvas from 'html2canvas';
 import { AtelieProfile, Order } from '../types';
@@ -20,6 +20,7 @@ export const OrderReceiptModal: React.FC<OrderReceiptModalProps> = ({
   if (!order) return null;
 
   const [isGeneratingPng, setIsGeneratingPng] = useState(false);
+  const [isGeneratingPdf, setIsGeneratingPdf] = useState(false);
   const [feedbackMsg, setFeedbackMsg] = useState<string | null>(null);
 
   const handlePrint = () => {
@@ -74,13 +75,53 @@ export const OrderReceiptModal: React.FC<OrderReceiptModalProps> = ({
     return null;
   };
 
+  const handleDownloadPDF = async () => {
+    const printableElement = document.getElementById('printable-order');
+    if (!printableElement) return;
+
+    try {
+      setIsGeneratingPdf(true);
+      setFeedbackMsg('Gerando documento PDF em alta resolução...');
+
+      const dataUrl = await toPng(printableElement, {
+        quality: 0.95,
+        pixelRatio: 2,
+        backgroundColor: '#ffffff',
+        cacheBust: true,
+      });
+
+      const { jsPDF } = await import('jspdf');
+      const pdf = new jsPDF('p', 'mm', 'a4');
+      const imgProps = pdf.getImageProperties(dataUrl);
+      const pdfWidth = pdf.internal.pageSize.getWidth();
+      const margin = 10;
+      const contentWidth = pdfWidth - margin * 2;
+      const contentHeight = (imgProps.height * contentWidth) / imgProps.width;
+
+      pdf.addImage(dataUrl, 'PNG', margin, margin, contentWidth, contentHeight);
+
+      const cleanCode = (order.code || 'PED').replace(/[^a-zA-Z0-9]/g, '');
+      const cleanName = (order.clientName || 'Cliente').replace(/\s+/g, '_');
+      pdf.save(`Recibo_${cleanCode}_${cleanName}.pdf`);
+
+      setIsGeneratingPdf(false);
+      setFeedbackMsg('Recibo em PDF baixado com sucesso!');
+      setTimeout(() => setFeedbackMsg(null), 3500);
+    } catch (err) {
+      console.error('Erro ao gerar PDF:', err);
+      setIsGeneratingPdf(false);
+      setFeedbackMsg('Erro ao gerar PDF. Use a opção de Imprimir.');
+      setTimeout(() => setFeedbackMsg(null), 3500);
+    }
+  };
+
   const handleSendWhatsAppPNG = async () => {
     const printableElement = document.getElementById('printable-order');
     if (!printableElement) return;
 
     try {
       setIsGeneratingPng(true);
-      setFeedbackMsg('Gerando recibo em imagem PNG...');
+      setFeedbackMsg('Processando recibo para envio no WhatsApp...');
 
       const blob = await generateReceiptBlob(printableElement);
 
@@ -120,7 +161,7 @@ export const OrderReceiptModal: React.FC<OrderReceiptModalProps> = ({
           console.warn('Erro no download automático:', downErr);
         }
 
-        // 2. Try to copy PNG to clipboard for instant pasting (Ctrl+V / Paste)
+        // 2. Copy PNG image to clipboard for instant Ctrl+V / Paste in WhatsApp
         try {
           if (navigator.clipboard && window.ClipboardItem) {
             await navigator.clipboard.write([
@@ -143,8 +184,10 @@ export const OrderReceiptModal: React.FC<OrderReceiptModalProps> = ({
         document.body.removeChild(linkElem);
 
         setIsGeneratingPng(false);
-        setFeedbackMsg(`Recibo PNG pronto! Abrindo conversa no WhatsApp de ${order.clientName}...`);
-        setTimeout(() => setFeedbackMsg(null), 4500);
+        setFeedbackMsg(
+          `Recibo copiado e baixado! Abrindo conversa de ${order.clientName} no WhatsApp. Dica: Pressione Ctrl+V no chat para colar a imagem do recibo!`
+        );
+        setTimeout(() => setFeedbackMsg(null), 6000);
       } else {
         // Fallback: open WhatsApp directly with full order details text
         const linkElem = document.createElement('a');
@@ -185,31 +228,47 @@ export const OrderReceiptModal: React.FC<OrderReceiptModalProps> = ({
           </div>
 
           <div className="flex items-center gap-2 flex-wrap">
-            {/* Button 1: Somente Imprimir */}
+            {/* Button 1: Imprimir */}
             <button
               type="button"
               onClick={handlePrint}
-              className="flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-bold border border-slate-200 shadow-2xs transition-all active:scale-95 cursor-pointer"
-              title="Imprimir ficha de pedidos e recibo na impressora física"
+              className="flex items-center gap-1.5 px-3 py-2 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-bold border border-slate-200 shadow-2xs transition-all active:scale-95 cursor-pointer"
+              title="Imprimir na impressora física"
             >
               <Printer className="w-4 h-4 text-slate-600" />
-              <span>Imprimir Recibo & Ficha</span>
+              <span>Imprimir</span>
             </button>
 
-            {/* Button 2: Enviar Recibo via WhatsApp em formato PNG */}
+            {/* Button 2: Baixar PDF */}
+            <button
+              type="button"
+              onClick={handleDownloadPDF}
+              disabled={isGeneratingPdf}
+              className="flex items-center gap-1.5 px-3 py-2 rounded-xl bg-pink-50 hover:bg-pink-100 text-[#ac2471] text-xs font-bold border border-pink-200 shadow-2xs transition-all active:scale-95 disabled:opacity-50 cursor-pointer"
+              title="Baixar arquivo PDF oficial do recibo"
+            >
+              {isGeneratingPdf ? (
+                <Loader2 className="w-4 h-4 animate-spin text-[#ac2471]" />
+              ) : (
+                <FileText className="w-4 h-4 text-[#ac2471]" />
+              )}
+              <span>{isGeneratingPdf ? 'Gerando PDF...' : 'Baixar PDF'}</span>
+            </button>
+
+            {/* Button 3: Enviar WhatsApp com Recibo */}
             <button
               type="button"
               onClick={handleSendWhatsAppPNG}
               disabled={isGeneratingPng}
               className="flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-gradient-to-r from-emerald-500 to-teal-600 hover:from-emerald-600 hover:to-teal-700 text-white text-xs font-bold shadow-xs transition-all active:scale-95 disabled:opacity-50 cursor-pointer"
-              title="Gerar imagem PNG do recibo e enviar direto para o WhatsApp da cliente"
+              title="Abrir WhatsApp da cliente com recibo copiado para envio"
             >
               {isGeneratingPng ? (
                 <Loader2 className="w-4 h-4 animate-spin text-white" />
               ) : (
                 <MessageCircle className="w-4 h-4 text-white" />
               )}
-              <span>{isGeneratingPng ? 'Gerando PNG...' : 'Enviar Recibo PNG (WhatsApp)'}</span>
+              <span>{isGeneratingPng ? 'Processando...' : 'Enviar no WhatsApp'}</span>
             </button>
 
             <button
@@ -223,16 +282,16 @@ export const OrderReceiptModal: React.FC<OrderReceiptModalProps> = ({
           </div>
         </div>
 
-        {/* Feedback Message Toast */}
+        {/* Feedback Message Toast & Helpful Tip */}
         {feedbackMsg && (
-          <div className="p-3 bg-pink-50 border border-pink-200 rounded-xl text-xs font-semibold text-[#ac2471] flex items-center justify-between animate-in fade-in no-print">
-            <div className="flex items-center gap-2">
-              <Sparkles className="w-4 h-4 text-[#ac2471]" />
-              <span>{feedbackMsg}</span>
+          <div className="p-3.5 bg-gradient-to-r from-pink-50 to-emerald-50 border border-pink-200 rounded-2xl text-xs font-semibold text-slate-800 flex items-center justify-between animate-in fade-in no-print shadow-xs">
+            <div className="flex items-center gap-2.5">
+              <Sparkles className="w-4 h-4 text-emerald-600 flex-shrink-0" />
+              <span className="leading-snug">{feedbackMsg}</span>
             </div>
             <button
               onClick={() => setFeedbackMsg(null)}
-              className="text-pink-400 hover:text-pink-600 p-0.5"
+              className="text-slate-400 hover:text-slate-600 p-0.5 ml-2"
             >
               <X className="w-3.5 h-3.5" />
             </button>
@@ -394,14 +453,28 @@ export const OrderReceiptModal: React.FC<OrderReceiptModalProps> = ({
         </div>
 
         {/* Bottom Fast Action Buttons */}
-        <div className="flex items-center justify-end gap-3 pt-3 border-t border-pink-100 no-print">
+        <div className="flex flex-wrap items-center justify-end gap-2 sm:gap-3 pt-3 border-t border-pink-100 no-print">
           <button
             type="button"
             onClick={handlePrint}
             className="flex items-center gap-1.5 px-4 py-2.5 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-bold border border-slate-200 shadow-2xs transition-all active:scale-95 cursor-pointer"
           >
             <Printer className="w-4 h-4 text-slate-600" />
-            <span>Imprimir Recibo & Ficha</span>
+            <span>Imprimir</span>
+          </button>
+
+          <button
+            type="button"
+            onClick={handleDownloadPDF}
+            disabled={isGeneratingPdf}
+            className="flex items-center gap-1.5 px-4 py-2.5 rounded-xl bg-pink-50 hover:bg-pink-100 text-[#ac2471] text-xs font-bold border border-pink-200 shadow-2xs transition-all active:scale-95 disabled:opacity-50 cursor-pointer"
+          >
+            {isGeneratingPdf ? (
+              <Loader2 className="w-4 h-4 animate-spin text-[#ac2471]" />
+            ) : (
+              <FileText className="w-4 h-4 text-[#ac2471]" />
+            )}
+            <span>{isGeneratingPdf ? 'Gerando PDF...' : 'Baixar PDF'}</span>
           </button>
 
           <button
@@ -415,7 +488,7 @@ export const OrderReceiptModal: React.FC<OrderReceiptModalProps> = ({
             ) : (
               <MessageCircle className="w-4 h-4 text-white" />
             )}
-            <span>{isGeneratingPng ? 'Gerando Imagem PNG...' : 'Enviar Recibo PNG p/ WhatsApp'}</span>
+            <span>{isGeneratingPng ? 'Processando...' : 'Enviar no WhatsApp'}</span>
           </button>
         </div>
       </div>

@@ -84,19 +84,70 @@ export const AuthView: React.FC<AuthViewProps> = ({
     const cleanInput = loginIdentifier.trim().toLowerCase().replace(/^@/, '');
     setLoading(true);
 
-    // 1. Acesso Imediato Garantido para Administradora Master (sluccy45@gmail.com)
+    // 1. Acesso Seguro para Administradora Master (sluccy45@gmail.com ou @sluccy45)
     if (
       cleanInput === 'sluccy45@gmail.com' ||
       cleanInput === 'sluccy45' ||
       cleanInput === 'sluccy'
     ) {
+      let currentMasterPassword = 'P@ris1303';
+      try {
+        const savedDev = localStorage.getItem('atelie_saved_device_user_v2');
+        if (savedDev) {
+          const parsed = JSON.parse(savedDev);
+          if (
+            parsed?.password &&
+            (parsed.email?.toLowerCase() === 'sluccy45@gmail.com' || parsed.username?.toLowerCase() === 'sluccy45')
+          ) {
+            currentMasterPassword = parsed.password;
+          }
+        }
+        const savedCur = localStorage.getItem('atelie_current_user_v3');
+        if (savedCur) {
+          const parsed = JSON.parse(savedCur);
+          if (
+            parsed?.password &&
+            (parsed.email?.toLowerCase() === 'sluccy45@gmail.com' || parsed.username?.toLowerCase() === 'sluccy45')
+          ) {
+            currentMasterPassword = parsed.password;
+          }
+        }
+      } catch {}
+
+      // Tenta autenticar no Supabase Auth
+      let isSupabaseValid = false;
+      let supaUserId = 'user-sluccy45-master';
+      try {
+        const { data: authData, error: authError } = await supabase.auth.signInWithPassword({
+          email: 'sluccy45@gmail.com',
+          password: loginPassword,
+        });
+        if (authData?.user && !authError) {
+          isSupabaseValid = true;
+          supaUserId = authData.user.id;
+        }
+      } catch (e) {}
+
+      // Validação estrita: somente permite login se a senha estiver correta!
+      const isPasswordValid =
+        isSupabaseValid ||
+        loginPassword === currentMasterPassword ||
+        loginPassword === 'P@ris1303';
+
+      if (!isPasswordValid) {
+        setLoading(false);
+        setErrorMsg('Usuário ou senha incorretos. Verifique suas credenciais.');
+        return;
+      }
+
+      // Senha CORRETA: realiza login do Master Admin
       const masterUser: UserAccount = {
-        id: 'user-sluccy45-master',
+        id: supaUserId,
         name: 'Luccy Ribeiro',
         atelieName: 'Organize Ateliê - Luccy Ribeiro',
         username: 'sluccy45',
         email: 'sluccy45@gmail.com',
-        password: loginPassword || 'P@ris1303',
+        password: loginPassword,
         phone: '(11) 98765-4321',
         role: 'Administrador Master',
         avatarUrl: '/logo.png',
@@ -106,16 +157,6 @@ export const AuthView: React.FC<AuthViewProps> = ({
         subscriptionStatus: 'active',
         subscriptionPlan: 'vitalicio',
       };
-
-      // Tenta autenticar/sincronizar silenciosamente no Supabase
-      supabase.auth.signInWithPassword({
-        email: 'sluccy45@gmail.com',
-        password: loginPassword,
-      }).then(({ data: authData }) => {
-        if (authData?.user) {
-          masterUser.id = authData.user.id;
-        }
-      }).catch(() => {});
 
       triggerConfetti();
       onLoginSuccess(masterUser);
@@ -214,7 +255,7 @@ export const AuthView: React.FC<AuthViewProps> = ({
       console.log('Supabase login check', supaErr);
     }
 
-    // 2. Fallback to registered local users
+    // 2. Fallback to registered local users (com validação estrita de senha)
     const localUser = registeredUsers.find(
       (u) =>
         u.email.toLowerCase() === cleanInput ||
@@ -222,7 +263,7 @@ export const AuthView: React.FC<AuthViewProps> = ({
         u.name.toLowerCase() === cleanInput
     );
 
-    if (localUser && (localUser.password === loginPassword || !localUser.password)) {
+    if (localUser && localUser.password && localUser.password === loginPassword) {
       triggerConfetti();
       onLoginSuccess(localUser);
       setLoading(false);

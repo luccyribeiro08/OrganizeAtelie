@@ -74,130 +74,11 @@ export default function App() {
     }
   });
 
-  // Single Saved Account on Device (Defaults to master account for instant 1-click access)
-  const [lastSavedUser, setLastSavedUser] = useState<UserAccount | null>(() => {
-    try {
-      const saved = localStorage.getItem('atelie_saved_device_user_v2');
-      if (saved) {
-        const parsed: UserAccount = JSON.parse(saved);
-        if (
-          parsed &&
-          parsed.email !== 'luccy@atelie.com' &&
-          parsed.id !== 'user-luccy-default' &&
-          parsed.email !== 'luccyribeiro08@gmail.com'
-        ) {
-          return parsed;
-        }
-      }
-    } catch {
-      return null;
-    }
-    return {
-      id: 'user-sluccy45-master',
-      name: 'Luccy Ribeiro',
-      atelieName: 'Organize Ateliê - Luccy Ribeiro',
-      username: 'sluccy45',
-      email: 'sluccy45@gmail.com',
-      password: 'P@ris1303',
-      phone: '(11) 98765-4321',
-      role: 'Administrador Master',
-      avatarUrl: '/logo.png',
-      logoUrl: '/logo.png',
-      createdAt: '2026-01-01T00:00:00Z',
-      isAdmin: true,
-      subscriptionStatus: 'active',
-      subscriptionPlan: 'vitalicio',
-    };
-  });
+  // Single Saved Account on Device (null by default to prevent automatic connection)
+  const [lastSavedUser, setLastSavedUser] = useState<UserAccount | null>(null);
 
-  // Current Logged In User State - Robust Session Persistence on Page Reload (F5)
-  const [currentUser, setCurrentUser] = useState<UserAccount | null>(() => {
-    try {
-      // 1. Direct logged-in user object
-      const directUserStr = localStorage.getItem('atelie_current_user_v3');
-      if (directUserStr) {
-        const parsed = JSON.parse(directUserStr);
-        if (
-          parsed &&
-          parsed.id &&
-          parsed.email !== 'luccy@atelie.com' &&
-          parsed.id !== 'user-luccy-default' &&
-          parsed.email !== 'luccyribeiro08@gmail.com'
-        ) {
-          return parsed;
-        }
-      }
-
-      // 2. Saved active session ID
-      const activeSessionId = localStorage.getItem('atelie_active_session_id_v2');
-      const savedUsersStr = localStorage.getItem('atelie_users_db_v2');
-      const usersList: UserAccount[] = savedUsersStr ? JSON.parse(savedUsersStr) : [];
-
-      if (activeSessionId) {
-        const found = usersList.find(
-          (u) =>
-            u.id === activeSessionId &&
-            u.email !== 'luccy@atelie.com' &&
-            u.id !== 'user-luccy-default' &&
-            u.email !== 'luccyribeiro08@gmail.com'
-        );
-        if (found) return found;
-      }
-
-      // 3. Fallback to saved device user account
-      const lastDeviceStr = localStorage.getItem('atelie_saved_device_user_v2');
-      if (lastDeviceStr) {
-        const parsed = JSON.parse(lastDeviceStr);
-        if (
-          parsed &&
-          parsed.id &&
-          parsed.email !== 'luccy@atelie.com' &&
-          parsed.id !== 'user-luccy-default' &&
-          parsed.email !== 'luccyribeiro08@gmail.com'
-        ) {
-          return parsed;
-        }
-      }
-
-      return null;
-    } catch {
-      return null;
-    }
-  });
-
-  // Check and restore active Supabase Auth session on mount
-  useEffect(() => {
-    const checkSupabaseAuth = async () => {
-      try {
-        const { data } = await supabase.auth.getSession();
-        if (data?.session?.user) {
-          const u = data.session.user;
-          const userMeta = u.user_metadata || {};
-          const supaUser: UserAccount = {
-            id: u.id,
-            name: userMeta.name || 'Artesã',
-            atelieName: userMeta.atelie_name || 'Meu Ateliê',
-            username: userMeta.username || '',
-            email: u.email || '',
-            password: '',
-            phone: userMeta.phone || '',
-            avatarUrl: userMeta.avatar_url || '',
-            logoUrl: userMeta.logo_url || '',
-            role: userMeta.role || 'Artesã Responsável',
-            createdAt: u.created_at || new Date().toISOString(),
-          };
-          setCurrentUser(supaUser);
-          try {
-            localStorage.setItem('atelie_current_user_v3', JSON.stringify(supaUser));
-            localStorage.setItem('atelie_active_session_id_v2', supaUser.id);
-          } catch {}
-        }
-      } catch (err) {
-        console.log('Supabase session restore check', err);
-      }
-    };
-    checkSupabaseAuth();
-  }, []);
+  // Current Logged In User State - Sempre exige login explícito com usuário e senha
+  const [currentUser, setCurrentUser] = useState<UserAccount | null>(null);
 
   // Helper to check if user is the Master Admin account
   const isMasterUser = (u?: UserAccount | null) =>
@@ -524,28 +405,12 @@ export default function App() {
     localStorage.setItem(`atelie_profile_${newUser.id}`, JSON.stringify(initialProfile));
 
     setRegisteredUsers((prev) => [...prev, newUser]);
-    setLastSavedUser(newUser);
     setCurrentUser(newUser);
-    try {
-      localStorage.setItem('atelie_current_user_v3', JSON.stringify(newUser));
-      localStorage.setItem('atelie_active_session_id_v2', newUser.id);
-      localStorage.setItem('atelie_saved_device_user_v2', JSON.stringify(newUser));
-    } catch (e) {
-      console.error(e);
-    }
   };
 
-  // Handle Login Success - Save ONLY this 1 account as the active saved device account
+  // Handle Login Success - In-memory active session (requires credentials on refresh/re-access)
   const handleLoginSuccess = (user: UserAccount) => {
     setCurrentUser(user);
-    setLastSavedUser(user);
-    try {
-      localStorage.setItem('atelie_current_user_v3', JSON.stringify(user));
-      localStorage.setItem('atelie_active_session_id_v2', user.id);
-      localStorage.setItem('atelie_saved_device_user_v2', JSON.stringify(user));
-    } catch (e) {
-      console.error(e);
-    }
     setActiveTab('pedidos');
   };
 

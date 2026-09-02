@@ -228,7 +228,7 @@ export const ConfiguracoesView: React.FC<ConfiguracoesViewProps> = ({
                         username: e.target.value.toLowerCase().replace(/[^a-z0-9_.]/g, ''),
                       })
                     }
-                    placeholder="ex: luccyatelie"
+                    placeholder="ex: meuatelie"
                     className="w-full px-3.5 py-2.5 bg-[#f8f9fa] border border-[#f0e4e8] rounded-xl text-xs font-semibold text-slate-800 focus:outline-hidden focus:border-[#ac2471]"
                   />
                 </div>

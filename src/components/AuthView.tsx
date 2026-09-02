@@ -569,7 +569,7 @@ export const AuthView: React.FC<AuthViewProps> = ({
                   required
                   value={regName}
                   onChange={(e) => setRegName(e.target.value)}
-                  placeholder="ex: Luccy Ribeiro"
+                  placeholder="ex: Maria Silva"
                   className="w-full pl-9 pr-3 py-2 bg-[#f8f9fa] border border-[#f0e4e8] rounded-xl text-xs text-slate-800 focus:outline-hidden focus:border-[#ac2471]"
                 />
               </div>
@@ -588,7 +588,7 @@ export const AuthView: React.FC<AuthViewProps> = ({
                   required
                   value={regAtelieName}
                   onChange={(e) => setRegAtelieName(e.target.value)}
-                  placeholder="ex: Luccy Ribeiro Papelaria Personalizada"
+                  placeholder="ex: Meu Ateliê Personalizados"
                   className="w-full pl-9 pr-3 py-2 bg-[#f8f9fa] border border-[#f0e4e8] rounded-xl text-xs text-slate-800 focus:outline-hidden focus:border-[#ac2471]"
                 />
               </div>
@@ -609,7 +609,7 @@ export const AuthView: React.FC<AuthViewProps> = ({
                   onChange={(e) =>
                     setRegUsername(e.target.value.toLowerCase().replace(/[^a-z0-9_.]/g, ''))
                   }
-                  placeholder="ex: luccyatelie (sem espaços)"
+                  placeholder="ex: meuatelie (sem espaços)"
                   className="w-full pl-9 pr-3 py-2 bg-[#f8f9fa] border border-[#f0e4e8] rounded-xl text-xs font-semibold text-slate-800 focus:outline-hidden focus:border-[#ac2471]"
                 />
               </div>

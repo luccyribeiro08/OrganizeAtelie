@@ -275,32 +275,87 @@ ALTER TABLE public.calendar_events ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.clients ENABLE ROW LEVEL SECURITY;
 
 -- ============================================================
--- 12. Políticas de Acesso Permissivas (RLS Policies)
--- Permitem leitura, inserção, atualização e exclusão completas
+-- 12. Função Auxiliar de Verificação Admin (SECURITY DEFINER)
+-- Evita o bug de Recursão Infinita (Infinite Recursion) no RLS
 -- ============================================================
+CREATE OR REPLACE FUNCTION public.is_admin_user()
+RETURNS BOOLEAN AS $$
+BEGIN
+  RETURN EXISTS (
+    SELECT 1 FROM public.profiles 
+    WHERE id = auth.uid()::text AND is_admin = true
+  );
+END;
+$$ LANGUAGE plpgsql SECURITY DEFINER SET search_path = public;
+
+-- ============================================================
+-- 13. Políticas de Segurança (RLS Policies) com Isolamento Total
+-- Garante acesso aos próprios dados e controle irrestrito ao Admin
+-- ============================================================
+
+-- 1. Profiles
 DROP POLICY IF EXISTS "Permitir acesso completo a profiles" ON public.profiles;
-CREATE POLICY "Permitir acesso completo a profiles" ON public.profiles FOR ALL USING (true) WITH CHECK (true);
+DROP POLICY IF EXISTS "Usuário gerencia próprio perfil" ON public.profiles;
+CREATE POLICY "Usuário gerencia próprio perfil" ON public.profiles
+  FOR ALL 
+  USING (id = auth.uid()::text OR public.is_admin_user())
+  WITH CHECK (id = auth.uid()::text OR public.is_admin_user());
 
+-- 2. Orders (Pedidos)
 DROP POLICY IF EXISTS "Permitir acesso completo a orders" ON public.orders;
-CREATE POLICY "Permitir acesso completo a orders" ON public.orders FOR ALL USING (true) WITH CHECK (true);
+DROP POLICY IF EXISTS "Usuário gerencia próprios pedidos" ON public.orders;
+CREATE POLICY "Usuário gerencia próprios pedidos" ON public.orders
+  FOR ALL 
+  USING (user_id = auth.uid()::text OR public.is_admin_user())
+  WITH CHECK (user_id = auth.uid()::text OR public.is_admin_user());
 
+-- 3. Catalog (Catálogo de Produtos)
 DROP POLICY IF EXISTS "Permitir acesso completo a catalog" ON public.catalog;
-CREATE POLICY "Permitir acesso completo a catalog" ON public.catalog FOR ALL USING (true) WITH CHECK (true);
+DROP POLICY IF EXISTS "Usuário gerencia próprio catálogo" ON public.catalog;
+CREATE POLICY "Usuário gerencia próprio catálogo" ON public.catalog
+  FOR ALL 
+  USING (user_id = auth.uid()::text OR public.is_admin_user())
+  WITH CHECK (user_id = auth.uid()::text OR public.is_admin_user());
 
+-- 4. Catalog Categories (Categorias de Catálogo)
 DROP POLICY IF EXISTS "Permitir acesso completo a catalog_categories" ON public.catalog_categories;
-CREATE POLICY "Permitir acesso completo a catalog_categories" ON public.catalog_categories FOR ALL USING (true) WITH CHECK (true);
+DROP POLICY IF EXISTS "Usuário gerencia próprias categorias de catálogo" ON public.catalog_categories;
+CREATE POLICY "Usuário gerencia próprias categorias de catálogo" ON public.catalog_categories
+  FOR ALL 
+  USING (user_id = auth.uid()::text OR public.is_admin_user())
+  WITH CHECK (user_id = auth.uid()::text OR public.is_admin_user());
 
+-- 5. Order Types (Tipos de Pedido)
 DROP POLICY IF EXISTS "Permitir acesso completo a order_types" ON public.order_types;
-CREATE POLICY "Permitir acesso completo a order_types" ON public.order_types FOR ALL USING (true) WITH CHECK (true);
+DROP POLICY IF EXISTS "Usuário gerencia próprios tipos de pedido" ON public.order_types;
+CREATE POLICY "Usuário gerencia próprios tipos de pedido" ON public.order_types
+  FOR ALL 
+  USING (user_id = auth.uid()::text OR public.is_admin_user())
+  WITH CHECK (user_id = auth.uid()::text OR public.is_admin_user());
 
+-- 6. Quotations (Orçamentos & Precificação)
 DROP POLICY IF EXISTS "Permitir acesso completo a quotations" ON public.quotations;
-CREATE POLICY "Permitir acesso completo a quotations" ON public.quotations FOR ALL USING (true) WITH CHECK (true);
+DROP POLICY IF EXISTS "Usuário gerencia próprios orçamentos" ON public.quotations;
+CREATE POLICY "Usuário gerencia próprios orçamentos" ON public.quotations
+  FOR ALL 
+  USING (user_id = auth.uid()::text OR public.is_admin_user())
+  WITH CHECK (user_id = auth.uid()::text OR public.is_admin_user());
 
+-- 7. Calendar Events (Agenda & Prazos)
 DROP POLICY IF EXISTS "Permitir acesso completo a calendar_events" ON public.calendar_events;
-CREATE POLICY "Permitir acesso completo a calendar_events" ON public.calendar_events FOR ALL USING (true) WITH CHECK (true);
+DROP POLICY IF EXISTS "Usuário gerencia sua agenda" ON public.calendar_events;
+CREATE POLICY "Usuário gerencia sua agenda" ON public.calendar_events
+  FOR ALL 
+  USING (user_id = auth.uid()::text OR public.is_admin_user())
+  WITH CHECK (user_id = auth.uid()::text OR public.is_admin_user());
 
+-- 8. Clients (Clientes Cadastrados)
 DROP POLICY IF EXISTS "Permitir acesso completo a clients" ON public.clients;
-CREATE POLICY "Permitir acesso completo a clients" ON public.clients FOR ALL USING (true) WITH CHECK (true);
+DROP POLICY IF EXISTS "Usuário gerencia seus clientes" ON public.clients;
+CREATE POLICY "Usuário gerencia seus clientes" ON public.clients
+  FOR ALL 
+  USING (user_id = auth.uid()::text OR public.is_admin_user())
+  WITH CHECK (user_id = auth.uid()::text OR public.is_admin_user());
 
 -- ============================================================
 -- 13. Trigger Automático: Criação de Perfil no Cadastro Supabase Auth

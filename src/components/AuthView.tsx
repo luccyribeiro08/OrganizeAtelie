@@ -90,7 +90,7 @@ export const AuthView: React.FC<AuthViewProps> = ({
       cleanInput === 'sluccy45' ||
       cleanInput === 'sluccy'
     ) {
-      let currentMasterPassword = 'P@ris1303';
+      let currentMasterPassword = '';
       try {
         const savedDev = localStorage.getItem('atelie_saved_device_user_v2');
         if (savedDev) {
@@ -128,11 +128,10 @@ export const AuthView: React.FC<AuthViewProps> = ({
         }
       } catch (e) {}
 
-      // Validação estrita: somente permite login se a senha estiver correta!
+      // Validação estrita: somente permite login se a senha for válida no Supabase ou local
       const isPasswordValid =
         isSupabaseValid ||
-        loginPassword === currentMasterPassword ||
-        loginPassword === 'P@ris1303';
+        (Boolean(currentMasterPassword) && loginPassword === currentMasterPassword);
 
       if (!isPasswordValid) {
         setLoading(false);

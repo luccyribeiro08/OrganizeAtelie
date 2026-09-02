@@ -1,7 +1,8 @@
-import React from 'react';
-import { CheckCircle2, Printer, Sparkles, X } from 'lucide-react';
+import React, { useState } from 'react';
+import { CheckCircle2, Download, Loader2, MessageCircle, Printer, Sparkles, X } from 'lucide-react';
+import html2canvas from 'html2canvas';
 import { AtelieProfile, Order } from '../types';
-import { formatCurrency, formatDate } from '../utils/helpers';
+import { createWhatsAppLink, formatCurrency, formatDate } from '../utils/helpers';
 import { BrandLogo } from './BrandLogo';
 
 interface OrderReceiptModalProps {
@@ -17,40 +18,191 @@ export const OrderReceiptModal: React.FC<OrderReceiptModalProps> = ({
 }) => {
   if (!order) return null;
 
+  const [isGeneratingPng, setIsGeneratingPng] = useState(false);
+  const [feedbackMsg, setFeedbackMsg] = useState<string | null>(null);
+
   const handlePrint = () => {
     window.print();
+  };
+
+  const handleSendWhatsAppPNG = async () => {
+    const printableElement = document.getElementById('printable-order');
+    if (!printableElement) return;
+
+    try {
+      setIsGeneratingPng(true);
+      setFeedbackMsg('Gerando recibo em imagem PNG...');
+
+      const canvas = await html2canvas(printableElement, {
+        scale: 2,
+        useCORS: true,
+        backgroundColor: '#ffffff',
+        logging: false,
+      });
+
+      const cleanCode = (order.code || 'PED').replace(/[^a-zA-Z0-9]/g, '');
+      const cleanName = (order.clientName || 'Cliente').replace(/\s+/g, '_');
+      const fileName = `Recibo_${cleanCode}_${cleanName}.png`;
+
+      const isFinalized = order.status === 'Finalizado';
+      const waMessage =
+        `Olá, *${order.clientName}*! Tudo bem? 💕\n\n` +
+        `Segue o comprovante e *Recibo Oficial do seu Pedido (${order.code})* do *${profile.name}*!\n\n` +
+        `📋 *Tema:* ${order.theme}\n` +
+        `📦 *Previsão de Entrega:* ${formatDate(order.deliveryDate)}\n` +
+        `💰 *Valor Total:* ${formatCurrency(order.financial.total)}\n` +
+        (!isFinalized && order.financial.remaining > 0
+          ? `💵 *Saldo Restante:* ${formatCurrency(order.financial.remaining)}\n`
+          : `✅ *Status:* 100% Quitado!\n`) +
+        (profile.pixKey && !isFinalized && order.financial.remaining > 0
+          ? `🔑 *Chave PIX:* ${profile.pixKey}\n\n`
+          : '\n') +
+        `Qualquer dúvida estamos à disposição! ✨`;
+
+      const waLink = createWhatsAppLink(order.clientPhone, waMessage);
+
+      canvas.toBlob(async (blob) => {
+        if (!blob) {
+          setIsGeneratingPng(false);
+          setFeedbackMsg(null);
+          return;
+        }
+
+        const pngFile = new File([blob], fileName, { type: 'image/png' });
+
+        // Try Web Share API (iPad, iPhone, Android)
+        if (navigator.canShare && navigator.canShare({ files: [pngFile] })) {
+          try {
+            await navigator.share({
+              files: [pngFile],
+              title: `Recibo ${order.code} - ${profile.name}`,
+              text: waMessage,
+            });
+            setIsGeneratingPng(false);
+            setFeedbackMsg('Recibo PNG compartilhado com sucesso!');
+            setTimeout(() => setFeedbackMsg(null), 3500);
+            return;
+          } catch (err: any) {
+            if (err.name === 'AbortError') {
+              setIsGeneratingPng(false);
+              setFeedbackMsg(null);
+              return;
+            }
+          }
+        }
+
+        // Fallback for Desktop/PC/Mac: copy PNG to clipboard + download PNG + open WhatsApp
+        try {
+          if (navigator.clipboard && window.ClipboardItem) {
+            await navigator.clipboard.write([
+              new ClipboardItem({
+                'image/png': blob,
+              }),
+            ]);
+          }
+        } catch (clipErr) {
+          console.warn('Clipboard write fallback:', clipErr);
+        }
+
+        // Trigger PNG file download
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = fileName;
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        URL.revokeObjectURL(url);
+
+        // Open WhatsApp
+        window.open(waLink, '_blank');
+
+        setIsGeneratingPng(false);
+        setFeedbackMsg('Recibo PNG baixado! Abrindo conversa no WhatsApp...');
+        setTimeout(() => setFeedbackMsg(null), 4000);
+      }, 'image/png');
+    } catch (err) {
+      console.error('Erro ao gerar recibo em PNG:', err);
+      setIsGeneratingPng(false);
+      setFeedbackMsg('Erro ao gerar imagem. Tente novamente.');
+      setTimeout(() => setFeedbackMsg(null), 3500);
+    }
   };
 
   return (
     <div className="fixed inset-0 bg-black/60 backdrop-blur-xs z-50 flex items-center justify-center p-4 overflow-y-auto">
       <div className="bg-white rounded-3xl max-w-2xl w-full p-6 sm:p-8 shadow-2xl border border-pink-100 space-y-6 animate-in fade-in zoom-in-95 my-8 max-h-[95vh] overflow-y-auto">
         {/* Actions Bar (hidden when printing) */}
-        <div className="flex items-center justify-between pb-3 border-b border-pink-100 no-print">
-          <span className="text-xs font-semibold text-slate-500">
-            Visualização de Impressão (Recibo & Ficha de Confecção)
-          </span>
-          <div className="flex items-center gap-2">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-3 border-b border-pink-100 no-print">
+          <div>
+            <span className="text-xs font-bold text-slate-700 block">
+              Recibo & Ficha de Confecção
+            </span>
+            <span className="text-[11px] text-slate-400">
+              Pedido {order.code} • {order.clientName}
+            </span>
+          </div>
+
+          <div className="flex items-center gap-2 flex-wrap">
+            {/* Button 1: Somente Imprimir */}
             <button
+              type="button"
               onClick={handlePrint}
-              className="flex items-center gap-1.5 px-4 py-2 rounded-xl bg-[#ac2471] text-white text-xs font-bold hover:bg-[#831843] transition-colors cursor-pointer"
+              className="flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-bold border border-slate-200 shadow-2xs transition-all active:scale-95 cursor-pointer"
+              title="Imprimir ficha de pedidos e recibo na impressora física"
             >
-              <Printer className="w-4 h-4" />
-              <span>Imprimir / Salvar PDF</span>
+              <Printer className="w-4 h-4 text-slate-600" />
+              <span>Imprimir Recibo & Ficha</span>
             </button>
+
+            {/* Button 2: Enviar Recibo via WhatsApp em formato PNG */}
             <button
+              type="button"
+              onClick={handleSendWhatsAppPNG}
+              disabled={isGeneratingPng}
+              className="flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-gradient-to-r from-emerald-500 to-teal-600 hover:from-emerald-600 hover:to-teal-700 text-white text-xs font-bold shadow-xs transition-all active:scale-95 disabled:opacity-50 cursor-pointer"
+              title="Gerar imagem PNG do recibo e enviar direto para o WhatsApp da cliente"
+            >
+              {isGeneratingPng ? (
+                <Loader2 className="w-4 h-4 animate-spin text-white" />
+              ) : (
+                <MessageCircle className="w-4 h-4 text-white" />
+              )}
+              <span>{isGeneratingPng ? 'Gerando PNG...' : 'Enviar Recibo PNG (WhatsApp)'}</span>
+            </button>
+
+            <button
+              type="button"
               onClick={onClose}
-              className="p-2 text-slate-400 hover:text-slate-700 rounded-xl hover:bg-pink-50"
+              className="p-2 text-slate-400 hover:text-slate-700 rounded-xl hover:bg-pink-50 cursor-pointer"
+              title="Fechar visualização"
             >
               <X className="w-5 h-5" />
             </button>
           </div>
         </div>
 
+        {/* Feedback Message Toast */}
+        {feedbackMsg && (
+          <div className="p-3 bg-pink-50 border border-pink-200 rounded-xl text-xs font-semibold text-[#ac2471] flex items-center justify-between animate-in fade-in no-print">
+            <div className="flex items-center gap-2">
+              <Sparkles className="w-4 h-4 text-[#ac2471]" />
+              <span>{feedbackMsg}</span>
+            </div>
+            <button
+              onClick={() => setFeedbackMsg(null)}
+              className="text-pink-400 hover:text-pink-600 p-0.5"
+            >
+              <X className="w-3.5 h-3.5" />
+            </button>
+          </div>
+        )}
+
         {/* ================= PRINTABLE CONTENT ================= */}
-        <div className="space-y-6 p-4 border border-slate-200 rounded-2xl bg-white text-slate-800" id="printable-order">
+        <div className="space-y-6 p-4 sm:p-6 border border-slate-200 rounded-2xl bg-white text-slate-800" id="printable-order">
           {/* Header */}
           <div className="flex items-center justify-between pb-4 border-b-2 border-pink-200">
-            <BrandLogo size="md" showSubtitle={true} />
+            <BrandLogo size="md" showSubtitle={true} customLogoUrl={profile.logoUrl} atelierName={profile.name} />
             <div className="text-right">
               <span className="text-sm font-extrabold text-[#ac2471] block font-heading">
                 FICHA DE PEDIDO & RECIBO
@@ -65,13 +217,13 @@ export const OrderReceiptModal: React.FC<OrderReceiptModalProps> = ({
           </div>
 
           {/* Client & Production Details */}
-          <div className="grid grid-cols-2 gap-4 text-xs">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 text-xs">
             <div className="p-3 bg-slate-50 rounded-xl space-y-1">
               <span className="font-bold text-slate-900 block uppercase text-[10px] tracking-wider text-pink-700">
                 Dados da Cliente
               </span>
               <p><strong>Nome:</strong> {order.clientName}</p>
-              <p><strong>Telefone/WhatsApp:</strong> {order.clientPhone}</p>
+              <p><strong>Telefone/WhatsApp:</strong> {order.clientPhone || 'Não informado'}</p>
               {order.clientInstagram && <p><strong>Instagram:</strong> {order.clientInstagram}</p>}
               <p><strong>Origem:</strong> {order.origin}</p>
             </div>
@@ -92,7 +244,7 @@ export const OrderReceiptModal: React.FC<OrderReceiptModalProps> = ({
             <span className="font-bold text-slate-900 block uppercase text-[10px] tracking-wider text-pink-700">
               Tema & Detalhes de Personalização
             </span>
-            <p><strong>Tema do Pedido:</strong> {order.theme}</p>
+            <p><strong>Tema do Pedido:</strong> {order.theme} • {order.orderType}</p>
             {order.personalization.honoreeName && (
               <p><strong>Homenageado(a):</strong> {order.personalization.honoreeName} ({order.personalization.age || ''})</p>
             )}
@@ -198,6 +350,32 @@ export const OrderReceiptModal: React.FC<OrderReceiptModalProps> = ({
               Agradecemos a preferência! Produtos artesanais e personalizados feitos com muito amor. ✨
             </p>
           </div>
+        </div>
+
+        {/* Bottom Fast Action Buttons */}
+        <div className="flex items-center justify-end gap-3 pt-3 border-t border-pink-100 no-print">
+          <button
+            type="button"
+            onClick={handlePrint}
+            className="flex items-center gap-1.5 px-4 py-2.5 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-bold border border-slate-200 shadow-2xs transition-all active:scale-95 cursor-pointer"
+          >
+            <Printer className="w-4 h-4 text-slate-600" />
+            <span>Imprimir Recibo & Ficha</span>
+          </button>
+
+          <button
+            type="button"
+            onClick={handleSendWhatsAppPNG}
+            disabled={isGeneratingPng}
+            className="flex items-center gap-1.5 px-4 py-2.5 rounded-xl bg-gradient-to-r from-emerald-500 to-teal-600 hover:from-emerald-600 hover:to-teal-700 text-white text-xs font-bold shadow-xs transition-all active:scale-95 disabled:opacity-50 cursor-pointer"
+          >
+            {isGeneratingPng ? (
+              <Loader2 className="w-4 h-4 animate-spin text-white" />
+            ) : (
+              <MessageCircle className="w-4 h-4 text-white" />
+            )}
+            <span>{isGeneratingPng ? 'Gerando Imagem PNG...' : 'Enviar Recibo PNG p/ WhatsApp'}</span>
+          </button>
         </div>
       </div>
     </div>

@@ -137,6 +137,7 @@ export interface AtelieProfile {
   id?: string;
   name: string;
   ownerName: string;
+  username?: string;
   role: string;
   slogan: string;
   phone: string;
@@ -160,6 +161,7 @@ export interface UserAccount {
   id: string;
   name: string; // Nome da responsável
   atelieName: string; // Nome do ateliê
+  username?: string; // Nome de usuário (@usuario) para login alternativo
   email: string;
   password?: string;
   phone?: string;

@@ -1,13 +1,20 @@
 import React, { useState } from 'react';
 import {
+  AlertCircle,
   Camera,
   Check,
   Database,
   Download,
+  Eye,
+  EyeOff,
   HelpCircle,
   Image as ImageIcon,
+  Key,
+  Loader2,
+  Lock,
   Save,
   Settings,
+  ShieldCheck,
   Sparkles,
   Upload,
   User
@@ -15,6 +22,7 @@ import {
 import { AtelieProfile } from '../types';
 import { readFileAsDataUrl, triggerConfetti } from '../utils/helpers';
 import { BrandLogo } from './BrandLogo';
+import { supabase } from '../lib/supabaseClient';
 
 interface ConfiguracoesViewProps {
   profile: AtelieProfile;
@@ -31,6 +39,14 @@ export const ConfiguracoesView: React.FC<ConfiguracoesViewProps> = ({
 }) => {
   const [formData, setFormData] = useState<AtelieProfile>({ ...profile });
   const [savedSuccess, setSavedSuccess] = useState(false);
+
+  // Password Change State
+  const [newPassword, setNewPassword] = useState('');
+  const [confirmPassword, setConfirmPassword] = useState('');
+  const [showPwd, setShowPwd] = useState(false);
+  const [pwdLoading, setPwdLoading] = useState(false);
+  const [pwdSuccess, setPwdSuccess] = useState('');
+  const [pwdError, setPwdError] = useState('');
 
   const handleProfilePhotoSelect = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -54,6 +70,40 @@ export const ConfiguracoesView: React.FC<ConfiguracoesViewProps> = ({
     setSavedSuccess(true);
     triggerConfetti();
     setTimeout(() => setSavedSuccess(false), 3000);
+  };
+
+  const handlePasswordChange = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setPwdError('');
+    setPwdSuccess('');
+
+    if (!newPassword || newPassword.length < 6) {
+      setPwdError('A nova senha deve ter no mínimo 6 caracteres.');
+      return;
+    }
+
+    if (newPassword !== confirmPassword) {
+      setPwdError('A confirmação de senha não confere com a nova senha.');
+      return;
+    }
+
+    setPwdLoading(true);
+    try {
+      const { error } = await supabase.auth.updateUser({ password: newPassword });
+      if (error) {
+        setPwdError(error.message || 'Erro ao alterar a senha.');
+      } else {
+        setPwdSuccess('Senha atualizada com sucesso no Supabase!');
+        setNewPassword('');
+        setConfirmPassword('');
+        triggerConfetti();
+        setTimeout(() => setPwdSuccess(''), 4000);
+      }
+    } catch (err: any) {
+      setPwdError(err?.message || 'Erro ao comunicar com o servidor.');
+    } finally {
+      setPwdLoading(false);
+    }
   };
 
   return (
@@ -164,7 +214,25 @@ export const ConfiguracoesView: React.FC<ConfiguracoesViewProps> = ({
                 </div>
               </div>
 
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                <div>
+                  <label className="block text-[11px] font-bold text-slate-500 uppercase mb-1">
+                    NOME DE USUÁRIO (@USUÁRIO)
+                  </label>
+                  <input
+                    type="text"
+                    value={formData.username || ''}
+                    onChange={(e) =>
+                      setFormData({
+                        ...formData,
+                        username: e.target.value.toLowerCase().replace(/[^a-z0-9_.]/g, ''),
+                      })
+                    }
+                    placeholder="ex: luccyatelie"
+                    className="w-full px-3.5 py-2.5 bg-[#f8f9fa] border border-[#f0e4e8] rounded-xl text-xs font-semibold text-slate-800 focus:outline-hidden focus:border-[#ac2471]"
+                  />
+                </div>
+
                 <div>
                   <label className="block text-[11px] font-bold text-slate-500 uppercase mb-1">
                     CARGO / PERFIL
@@ -241,11 +309,98 @@ export const ConfiguracoesView: React.FC<ConfiguracoesViewProps> = ({
                   className="flex items-center gap-2 px-6 py-2.5 rounded-2xl bg-gradient-to-r from-[#9d174d] to-[#be185d] text-white font-semibold text-xs sm:text-sm shadow-md hover:shadow-lg transition-all cursor-pointer"
                 >
                   <Save className="w-4 h-4" />
-                  <span>Salvar Alterações</span>
+                  <span>Salvar Dados do Perfil</span>
                 </button>
               </div>
             </div>
           </form>
+
+          {/* ================= ALTERAR SENHA DE ACESSO ================= */}
+          <div className="bg-white rounded-3xl p-6 sm:p-8 shadow-atelie border border-pink-100/70 space-y-5">
+            <div className="flex items-center gap-3">
+              <div className="w-9 h-9 rounded-2xl bg-gradient-to-tr from-pink-500 to-[#ac2471] text-white flex items-center justify-center shadow-xs">
+                <Key className="w-4 h-4" />
+              </div>
+              <div>
+                <h2 className="text-lg font-heading font-bold text-slate-800 tracking-tight">
+                  Alterar Senha de Acesso
+                </h2>
+                <p className="text-xs text-slate-500">
+                  Atualize sua senha de login no Organize Ateliê com segurança.
+                </p>
+              </div>
+            </div>
+
+            {pwdSuccess && (
+              <div className="p-3.5 rounded-2xl bg-emerald-50 border border-emerald-200 text-xs text-emerald-800 font-semibold flex items-center gap-2 animate-in fade-in">
+                <Check className="w-4 h-4 text-emerald-600 flex-shrink-0" />
+                <span>{pwdSuccess}</span>
+              </div>
+            )}
+
+            {pwdError && (
+              <div className="p-3.5 rounded-2xl bg-rose-50 border border-rose-200 text-xs text-rose-700 font-medium flex items-center gap-2 animate-in fade-in">
+                <AlertCircle className="w-4 h-4 text-rose-600 flex-shrink-0" />
+                <span>{pwdError}</span>
+              </div>
+            )}
+
+            <form onSubmit={handlePasswordChange} className="space-y-4">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-[11px] font-bold text-slate-500 uppercase mb-1">
+                    Nova Senha (mínimo 6 dígitos)
+                  </label>
+                  <div className="relative">
+                    <input
+                      type={showPwd ? 'text' : 'password'}
+                      required
+                      value={newPassword}
+                      onChange={(e) => setNewPassword(e.target.value)}
+                      placeholder="••••••••"
+                      className="w-full pl-3.5 pr-10 py-2.5 bg-[#f8f9fa] border border-[#f0e4e8] rounded-xl text-xs text-slate-800 focus:outline-hidden focus:border-[#ac2471]"
+                    />
+                    <button
+                      type="button"
+                      onClick={() => setShowPwd(!showPwd)}
+                      className="absolute inset-y-0 right-0 pr-3 flex items-center text-slate-400 hover:text-slate-600"
+                    >
+                      {showPwd ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                    </button>
+                  </div>
+                </div>
+
+                <div>
+                  <label className="block text-[11px] font-bold text-slate-500 uppercase mb-1">
+                    Confirmar Nova Senha
+                  </label>
+                  <input
+                    type={showPwd ? 'text' : 'password'}
+                    required
+                    value={confirmPassword}
+                    onChange={(e) => setConfirmPassword(e.target.value)}
+                    placeholder="••••••••"
+                    className="w-full px-3.5 py-2.5 bg-[#f8f9fa] border border-[#f0e4e8] rounded-xl text-xs text-slate-800 focus:outline-hidden focus:border-[#ac2471]"
+                  />
+                </div>
+              </div>
+
+              <div className="flex justify-end pt-1">
+                <button
+                  type="submit"
+                  disabled={pwdLoading}
+                  className="flex items-center gap-2 px-5 py-2.5 rounded-xl bg-slate-900 hover:bg-slate-800 text-white font-semibold text-xs transition-all active:scale-95 disabled:opacity-50 cursor-pointer shadow-xs"
+                >
+                  {pwdLoading ? (
+                    <Loader2 className="w-4 h-4 animate-spin" />
+                  ) : (
+                    <ShieldCheck className="w-4 h-4 text-emerald-400" />
+                  )}
+                  <span>{pwdLoading ? 'Atualizando senha...' : 'Atualizar Nova Senha'}</span>
+                </button>
+              </div>
+            </form>
+          </div>
 
           {/* Backup / Export Section */}
           <div className="bg-white rounded-3xl p-6 sm:p-8 shadow-atelie border border-pink-100/70 space-y-4">

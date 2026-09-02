@@ -15,6 +15,7 @@ CREATE TABLE IF NOT EXISTS public.profiles (
   name TEXT NOT NULL,
   owner_name TEXT,
   atelie_name TEXT,
+  username TEXT,
   email TEXT UNIQUE NOT NULL,
   phone TEXT,
   role TEXT DEFAULT 'Artesã Responsável',
@@ -46,6 +47,10 @@ BEGIN
 
   IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_schema = 'public' AND table_name = 'profiles' AND column_name = 'atelie_name') THEN
     ALTER TABLE public.profiles ADD COLUMN atelie_name TEXT;
+  END IF;
+
+  IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_schema = 'public' AND table_name = 'profiles' AND column_name = 'username') THEN
+    ALTER TABLE public.profiles ADD COLUMN username TEXT;
   END IF;
 
   IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_schema = 'public' AND table_name = 'profiles' AND column_name = 'catalog_categories') THEN
@@ -309,6 +314,7 @@ BEGIN
     name,
     owner_name,
     atelie_name,
+    username,
     email,
     phone,
     role,
@@ -327,6 +333,7 @@ BEGIN
     COALESCE(NEW.raw_user_meta_data->>'name', NEW.raw_user_meta_data->>'atelie_name', 'Artesã'),
     COALESCE(NEW.raw_user_meta_data->>'name', 'Artesã'),
     COALESCE(NEW.raw_user_meta_data->>'atelie_name', 'Meu Ateliê'),
+    LOWER(TRIM(COALESCE(NEW.raw_user_meta_data->>'username', ''))),
     NEW.email,
     COALESCE(NEW.raw_user_meta_data->>'phone', ''),
     COALESCE(NEW.raw_user_meta_data->>'role', 'Artesã Responsável'),
@@ -341,6 +348,7 @@ BEGIN
     NOW()
   )
   ON CONFLICT (id) DO UPDATE SET
+    username = COALESCE(NULLIF(EXCLUDED.username, ''), public.profiles.username),
     is_admin = CASE WHEN LOWER(TRIM(EXCLUDED.email)) = 'luccyribeiro08@gmail.com' THEN true ELSE false END,
     subscription_status = CASE WHEN LOWER(TRIM(EXCLUDED.email)) = 'luccyribeiro08@gmail.com' THEN 'active' ELSE public.profiles.subscription_status END,
     subscription_plan = CASE WHEN LOWER(TRIM(EXCLUDED.email)) = 'luccyribeiro08@gmail.com' THEN 'vitalicio' ELSE public.profiles.subscription_plan END;

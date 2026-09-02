@@ -1,9 +1,11 @@
 import React, { useState } from 'react';
 import {
+  AtSign,
   Camera,
   Check,
   Eye,
   EyeOff,
+  Gift,
   Heart,
   Lock,
   Mail,
@@ -49,6 +51,7 @@ export const AuthView: React.FC<AuthViewProps> = ({
   // Register Form
   const [regName, setRegName] = useState('');
   const [regAtelieName, setRegAtelieName] = useState('');
+  const [regUsername, setRegUsername] = useState('');
   const [regEmail, setRegEmail] = useState('');
   const [regPhone, setRegPhone] = useState('');
   const [regPassword, setRegPassword] = useState('');
@@ -67,24 +70,53 @@ export const AuthView: React.FC<AuthViewProps> = ({
     }
   };
 
-  // Login Submit
+  // Login Submit (suporta e-mail OU nome de usuário)
   const handleLoginSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setErrorMsg('');
     setSuccessMsg('');
 
     if (!loginIdentifier.trim() || !loginPassword) {
-      setErrorMsg('Por favor, informe seu email/usuário e sua senha.');
+      setErrorMsg('Por favor, informe seu email ou usuário e sua senha.');
       return;
     }
 
-    const cleanInput = loginIdentifier.trim().toLowerCase();
+    const cleanInput = loginIdentifier.trim().toLowerCase().replace(/^@/, '');
     setLoading(true);
+
+    let emailToAuth = cleanInput;
+
+    // Se o usuário digitou nome de usuário (sem @ e sem domínio de email)
+    if (!cleanInput.includes('@')) {
+      try {
+        const { data: profileByUsername } = await supabase
+          .from('profiles')
+          .select('email')
+          .eq('username', cleanInput)
+          .maybeSingle();
+
+        if (profileByUsername?.email) {
+          emailToAuth = profileByUsername.email.toLowerCase();
+        } else {
+          // Busca nos usuários locais registrados
+          const localMatch = registeredUsers.find(
+            (u) =>
+              (u.username && u.username.toLowerCase() === cleanInput) ||
+              u.name.toLowerCase() === cleanInput
+          );
+          if (localMatch?.email) {
+            emailToAuth = localMatch.email.toLowerCase();
+          }
+        }
+      } catch (e) {
+        console.log('Busca por username', e);
+      }
+    }
 
     // 1. Try Supabase Auth
     try {
       const { data: authData, error: authError } = await supabase.auth.signInWithPassword({
-        email: cleanInput,
+        email: emailToAuth,
         password: loginPassword,
       });
 
@@ -94,6 +126,7 @@ export const AuthView: React.FC<AuthViewProps> = ({
         // Fetch custom profile data if available
         let profileName = userMeta.name || 'Artesã';
         let atelieName = userMeta.atelie_name || 'Meu Ateliê';
+        let username = userMeta.username || cleanInput;
         let phone = userMeta.phone || '';
         let avatarUrl = userMeta.avatar_url || '';
         let logoUrl = userMeta.logo_url || '';
@@ -109,6 +142,7 @@ export const AuthView: React.FC<AuthViewProps> = ({
           if (profileData) {
             profileName = profileData.name || profileName;
             atelieName = profileData.atelie_name || atelieName;
+            username = profileData.username || username;
             phone = profileData.phone || phone;
             avatarUrl = profileData.avatar_url || avatarUrl;
             logoUrl = profileData.logo_url || logoUrl;
@@ -122,7 +156,8 @@ export const AuthView: React.FC<AuthViewProps> = ({
           id: authData.user.id,
           name: profileName,
           atelieName: atelieName,
-          email: authData.user.email || cleanInput,
+          username: username,
+          email: authData.user.email || emailToAuth,
           password: loginPassword,
           phone: phone,
           avatarUrl: avatarUrl,
@@ -140,10 +175,11 @@ export const AuthView: React.FC<AuthViewProps> = ({
       console.log('Supabase login check', supaErr);
     }
 
-    // 2. Fallback to registered local users (e.g. default demo account)
+    // 2. Fallback to registered local users
     const localUser = registeredUsers.find(
       (u) =>
         u.email.toLowerCase() === cleanInput ||
+        (u.username && u.username.toLowerCase() === cleanInput) ||
         u.name.toLowerCase() === cleanInput
     );
 
@@ -172,6 +208,10 @@ export const AuthView: React.FC<AuthViewProps> = ({
       setErrorMsg('Informe o nome do seu ateliê.');
       return;
     }
+    if (!regUsername.trim()) {
+      setErrorMsg('Informe um nome de usuário para login rápido.');
+      return;
+    }
     if (!regEmail.trim()) {
       setErrorMsg('Informe seu e-mail de acesso.');
       return;
@@ -184,6 +224,8 @@ export const AuthView: React.FC<AuthViewProps> = ({
       setErrorMsg('As senhas digitadas não coincidem.');
       return;
     }
+
+    const cleanUsername = regUsername.trim().toLowerCase().replace(/[^a-z0-9_.]/g, '');
 
     const defaultAvatar =
       regAvatarUrl ||
@@ -200,6 +242,7 @@ export const AuthView: React.FC<AuthViewProps> = ({
           data: {
             name: regName.trim(),
             atelie_name: regAtelieName.trim(),
+            username: cleanUsername,
             phone: regPhone.trim(),
             avatar_url: defaultAvatar,
             logo_url: defaultAvatar,
@@ -224,6 +267,7 @@ export const AuthView: React.FC<AuthViewProps> = ({
           id: userId,
           name: regName.trim(),
           atelie_name: regAtelieName.trim(),
+          username: cleanUsername,
           email: regEmail.trim().toLowerCase(),
           phone: regPhone.trim(),
           avatar_url: defaultAvatar,
@@ -238,6 +282,7 @@ export const AuthView: React.FC<AuthViewProps> = ({
         id: userId,
         name: regName.trim(),
         atelieName: regAtelieName.trim(),
+        username: cleanUsername,
         email: regEmail.trim().toLowerCase(),
         password: regPassword,
         phone: regPhone.trim(),
@@ -249,7 +294,7 @@ export const AuthView: React.FC<AuthViewProps> = ({
 
       onRegisterUser(newUser);
       triggerConfetti();
-      setSuccessMsg('Conta criada com sucesso no Supabase! Entrando no ateliê...');
+      setSuccessMsg('Conta criada com sucesso! Você ganhou 7 dias grátis de acesso. Entrando no ateliê...');
       setTimeout(() => {
         onLoginSuccess(newUser);
       }, 700);
@@ -284,6 +329,21 @@ export const AuthView: React.FC<AuthViewProps> = ({
           </div>
         </div>
 
+        {/* Free 7-Day Trial Promotional Banner */}
+        <div className="p-3.5 rounded-2xl bg-gradient-to-r from-pink-500 via-[#ac2471] to-purple-600 text-white shadow-md relative overflow-hidden flex items-center gap-3">
+          <div className="w-10 h-10 rounded-xl bg-white/20 backdrop-blur-xs flex items-center justify-center flex-shrink-0">
+            <Gift className="w-5 h-5 text-amber-300 animate-pulse" />
+          </div>
+          <div className="text-left leading-tight">
+            <p className="text-xs font-black uppercase tracking-wider text-amber-200 flex items-center gap-1">
+              <span>🎁 Ganhe 7 Dias Grátis!</span>
+            </p>
+            <p className="text-[11px] text-pink-50 font-medium mt-0.5 leading-snug">
+              Crie sua conta agora e teste todas as ferramentas completas por <strong>7 dias sem custo</strong>.
+            </p>
+          </div>
+        </div>
+
         {/* Tab Toggle: Entrar vs Criar Conta */}
         <div className="grid grid-cols-2 p-1 bg-pink-50/70 rounded-2xl border border-pink-100">
           <button
@@ -314,7 +374,7 @@ export const AuthView: React.FC<AuthViewProps> = ({
                 : 'text-slate-500 hover:text-slate-800'
             }`}
           >
-            Criar Conta
+            Criar Conta (7d Grátis)
           </button>
         </div>
 
@@ -336,7 +396,7 @@ export const AuthView: React.FC<AuthViewProps> = ({
           <form onSubmit={handleLoginSubmit} className="space-y-4">
             <div>
               <label className="block text-[11px] font-bold text-slate-500 uppercase tracking-wider mb-1.5">
-                E-mail ou Usuário
+                E-mail ou Nome de Usuário
               </label>
               <div className="relative">
                 <div className="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none text-slate-400">
@@ -347,7 +407,7 @@ export const AuthView: React.FC<AuthViewProps> = ({
                   required
                   value={loginIdentifier}
                   onChange={(e) => setLoginIdentifier(e.target.value)}
-                  placeholder="seuemail@exemplo.com"
+                  placeholder="seuemail@exemplo.com ou @usuario"
                   className="w-full pl-10 pr-4 py-2.5 bg-[#f8f9fa] border border-[#f0e4e8] rounded-2xl text-xs text-slate-800 focus:outline-hidden focus:border-[#ac2471] focus:bg-white"
                 />
               </div>
@@ -449,7 +509,7 @@ export const AuthView: React.FC<AuthViewProps> = ({
                         {savedAccount.atelieName}
                       </p>
                       <p className="text-[10px] text-slate-400 truncate">
-                        {savedAccount.email}
+                        {savedAccount.username ? `@${savedAccount.username} • ` : ''}{savedAccount.email}
                       </p>
                     </div>
                   </div>
@@ -536,6 +596,30 @@ export const AuthView: React.FC<AuthViewProps> = ({
 
             <div>
               <label className="block text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-1">
+                Nome de Usuário (@usuario para login) *
+              </label>
+              <div className="relative">
+                <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none text-slate-400">
+                  <AtSign className="w-3.5 h-3.5" />
+                </div>
+                <input
+                  type="text"
+                  required
+                  value={regUsername}
+                  onChange={(e) =>
+                    setRegUsername(e.target.value.toLowerCase().replace(/[^a-z0-9_.]/g, ''))
+                  }
+                  placeholder="ex: luccyatelie (sem espaços)"
+                  className="w-full pl-9 pr-3 py-2 bg-[#f8f9fa] border border-[#f0e4e8] rounded-xl text-xs font-semibold text-slate-800 focus:outline-hidden focus:border-[#ac2471]"
+                />
+              </div>
+              <p className="text-[10px] text-slate-400 mt-0.5">
+                Você poderá entrar usando este nome de usuário ou seu e-mail.
+              </p>
+            </div>
+
+            <div>
+              <label className="block text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-1">
                 E-mail para Login *
               </label>
               <div className="relative">
@@ -581,7 +665,7 @@ export const AuthView: React.FC<AuthViewProps> = ({
                   required
                   value={regPassword}
                   onChange={(e) => setRegPassword(e.target.value)}
-                  placeholder="Mín. 4 dígitos"
+                  placeholder="Mín. 6 dígitos"
                   className="w-full px-3 py-2 bg-[#f8f9fa] border border-[#f0e4e8] rounded-xl text-xs text-slate-800 focus:outline-hidden focus:border-[#ac2471]"
                 />
               </div>
@@ -610,7 +694,7 @@ export const AuthView: React.FC<AuthViewProps> = ({
               }`}
             >
               <UserPlus className="w-4 h-4" />
-              <span>{loading ? 'Criando conta no Supabase...' : 'Concluir Cadastro & Acessar'}</span>
+              <span>{loading ? 'Criando conta no Supabase...' : 'Criar Conta & Ganhar 7 Dias Grátis'}</span>
             </button>
           </form>
         )}

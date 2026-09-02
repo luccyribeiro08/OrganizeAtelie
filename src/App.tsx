@@ -141,6 +141,7 @@ export default function App() {
             id: u.id,
             name: userMeta.name || 'Artesã',
             atelieName: userMeta.atelie_name || 'Meu Ateliê',
+            username: userMeta.username || '',
             email: u.email || '',
             password: '',
             phone: userMeta.phone || '',
@@ -173,6 +174,7 @@ export default function App() {
     return {
       name: user.atelieName || 'Meu Ateliê',
       ownerName: user.name || 'Artesã',
+      username: user.username || '',
       role: user.role || 'Artesã Responsável',
       slogan: 'Papelaria Personalizada & Afetiva',
       phone: user.phone || '',
@@ -536,6 +538,7 @@ export default function App() {
         ...currentUser,
         name: updatedProfile.ownerName,
         atelieName: updatedProfile.name,
+        username: updatedProfile.username || currentUser.username,
         avatarUrl: updatedProfile.avatarUrl,
         logoUrl: updatedProfile.logoUrl,
         phone: updatedProfile.phone,
@@ -554,9 +557,7 @@ export default function App() {
         }
       }
       // Async sync with Supabase
-      if (currentUser.id !== 'user-luccy-default') {
-        supabaseService.saveProfile(currentUser.id, updatedProfile);
-      }
+      supabaseService.saveProfile(currentUser.id, updatedProfile);
     }
   };
 

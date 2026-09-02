@@ -106,31 +106,21 @@ export const OrderReceiptModal: React.FC<OrderReceiptModalProps> = ({
       const waLink = createWhatsAppLink(order.clientPhone, waMessage);
 
       if (blob) {
-        const pngFile = new File([blob], fileName, { type: 'image/png' });
-
-        // Try Web Share API (iPad, iPhone, Android)
-        if (navigator.canShare && navigator.canShare({ files: [pngFile] })) {
-          try {
-            await navigator.share({
-              files: [pngFile],
-              title: `Recibo ${order.code} - ${profile.name}`,
-              text: waMessage,
-            });
-            setIsGeneratingPng(false);
-            setFeedbackMsg('Recibo PNG compartilhado com sucesso!');
-            setTimeout(() => setFeedbackMsg(null), 3500);
-            return;
-          } catch (err: any) {
-            if (err.name === 'AbortError') {
-              setIsGeneratingPng(false);
-              setFeedbackMsg(null);
-              return;
-            }
-            console.warn('navigator.share falhou:', err);
-          }
+        // 1. Trigger PNG file download so the user has the image ready
+        try {
+          const url = URL.createObjectURL(blob);
+          const a = document.createElement('a');
+          a.href = url;
+          a.download = fileName;
+          document.body.appendChild(a);
+          a.click();
+          document.body.removeChild(a);
+          setTimeout(() => URL.revokeObjectURL(url), 1500);
+        } catch (downErr) {
+          console.warn('Erro no download automático:', downErr);
         }
 
-        // Fallback for Desktop/PC/Mac: copy PNG to clipboard + download PNG + open WhatsApp
+        // 2. Try to copy PNG to clipboard for instant pasting (Ctrl+V / Paste)
         try {
           if (navigator.clipboard && window.ClipboardItem) {
             await navigator.clipboard.write([
@@ -143,35 +133,39 @@ export const OrderReceiptModal: React.FC<OrderReceiptModalProps> = ({
           console.warn('Clipboard write fallback:', clipErr);
         }
 
-        // Trigger PNG file download
-        const url = URL.createObjectURL(blob);
-        const a = document.createElement('a');
-        a.href = url;
-        a.download = fileName;
-        document.body.appendChild(a);
-        a.click();
-        document.body.removeChild(a);
-        setTimeout(() => URL.revokeObjectURL(url), 1000);
-
-        // Open WhatsApp
-        window.open(waLink, '_blank');
+        // 3. Open WhatsApp directly in the conversation with the registered client number
+        const linkElem = document.createElement('a');
+        linkElem.href = waLink;
+        linkElem.target = '_blank';
+        linkElem.rel = 'noopener noreferrer';
+        document.body.appendChild(linkElem);
+        linkElem.click();
+        document.body.removeChild(linkElem);
 
         setIsGeneratingPng(false);
-        setFeedbackMsg('Recibo PNG baixado! Abrindo conversa no WhatsApp...');
-        setTimeout(() => setFeedbackMsg(null), 4000);
+        setFeedbackMsg(`Recibo PNG pronto! Abrindo conversa no WhatsApp de ${order.clientName}...`);
+        setTimeout(() => setFeedbackMsg(null), 4500);
       } else {
-        // Fallback if canvas rendering could not produce blob: still open WhatsApp with text receipt
-        window.open(waLink, '_blank');
+        // Fallback: open WhatsApp directly with full order details text
+        const linkElem = document.createElement('a');
+        linkElem.href = waLink;
+        linkElem.target = '_blank';
+        linkElem.rel = 'noopener noreferrer';
+        document.body.appendChild(linkElem);
+        linkElem.click();
+        document.body.removeChild(linkElem);
+
         setIsGeneratingPng(false);
-        setFeedbackMsg('Abrindo WhatsApp com os dados do pedido...');
-        setTimeout(() => setFeedbackMsg(null), 3500);
+        setFeedbackMsg(`Abrindo conversa no WhatsApp de ${order.clientName}...`);
+        setTimeout(() => setFeedbackMsg(null), 4000);
       }
     } catch (err) {
       console.error('Erro ao processar recibo:', err);
       setIsGeneratingPng(false);
-      const waMessage = `Olá, *${order.clientName}*! Segue o recibo do seu Pedido (${order.code}) do ${profile.name}.`;
-      window.open(createWhatsAppLink(order.clientPhone, waMessage), '_blank');
-      setFeedbackMsg('Abrindo WhatsApp da cliente...');
+      const fallbackWaMessage = `Olá, *${order.clientName}*! Segue o recibo do seu Pedido (${order.code}) do ${profile.name}.`;
+      const fallbackLink = createWhatsAppLink(order.clientPhone, fallbackWaMessage);
+      window.open(fallbackLink, '_blank');
+      setFeedbackMsg(`Abrindo WhatsApp de ${order.clientName}...`);
       setTimeout(() => setFeedbackMsg(null), 3500);
     }
   };

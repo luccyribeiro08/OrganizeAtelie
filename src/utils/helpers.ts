@@ -68,15 +68,24 @@ export function getDaysRemaining(deliveryDate: string): { days: number; text: st
 }
 
 export function cleanPhone(phone: string): string {
-  return phone.replace(/\D/g, '');
+  return (phone || '').replace(/\D/g, '');
 }
 
 export function createWhatsAppLink(phone: string, text: string): string {
   let cleaned = cleanPhone(phone);
-  if (!cleaned.startsWith('55') && cleaned.length >= 10) {
+  if (!cleaned) return `https://api.whatsapp.com/send?text=${encodeURIComponent(text)}`;
+
+  // If starts with 0 and length >= 11, strip leading 0 (e.g. 021973389309 -> 21973389309)
+  if (cleaned.startsWith('0') && cleaned.length >= 11) {
+    cleaned = cleaned.substring(1);
+  }
+
+  // If Brazilian number without country code 55 (e.g. 21973389309 -> 11 digits, or 2133389309 -> 10 digits)
+  if (!cleaned.startsWith('55') && (cleaned.length === 10 || cleaned.length === 11)) {
     cleaned = '55' + cleaned;
   }
-  return `https://wa.me/${cleaned}?text=${encodeURIComponent(text)}`;
+
+  return `https://api.whatsapp.com/send?phone=${cleaned}&text=${encodeURIComponent(text)}`;
 }
 
 export function readFileAsDataUrl(file: File): Promise<string> {

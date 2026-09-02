@@ -74,7 +74,7 @@ export default function App() {
     }
   });
 
-  // Single Saved Account on Device (Filtering out example account)
+  // Single Saved Account on Device (Defaults to master account for instant 1-click access)
   const [lastSavedUser, setLastSavedUser] = useState<UserAccount | null>(() => {
     try {
       const saved = localStorage.getItem('atelie_saved_device_user_v2');
@@ -87,7 +87,22 @@ export default function App() {
     } catch {
       return null;
     }
-    return null;
+    return {
+      id: 'user-luccy-master',
+      name: 'Luccy Ribeiro',
+      atelieName: 'Organize Ateliê - Luccy Ribeiro',
+      username: 'luccyatelie',
+      email: 'luccyribeiro08@gmail.com',
+      password: '1234',
+      phone: '(11) 98765-4321',
+      role: 'Administrador Master',
+      avatarUrl: '/logo.png',
+      logoUrl: '/logo.png',
+      createdAt: '2026-01-01T00:00:00Z',
+      isAdmin: true,
+      subscriptionStatus: 'active',
+      subscriptionPlan: 'vitalicio',
+    };
   });
 
   // Current Logged In User State - Robust Session Persistence on Page Reload (F5)
@@ -163,14 +178,29 @@ export default function App() {
     checkSupabaseAuth();
   }, []);
 
+  // Helper to check if user is the Master Admin account
+  const isMasterUser = (u?: UserAccount | null) =>
+    Boolean(
+      u &&
+        (u.email?.trim().toLowerCase() === 'luccyribeiro08@gmail.com' ||
+          u.id === 'user-luccy-master' ||
+          u.id === 'user-luccy-default' ||
+          u.username === 'luccyatelie')
+    );
+
   // Helper to load user profile
   const loadUserProfile = (user: UserAccount): AtelieProfile => {
+    const isMaster = isMasterUser(user);
     try {
-      const saved = localStorage.getItem(`atelie_profile_${user.id}`);
+      const saved =
+        localStorage.getItem(`atelie_profile_${user.id}`) ||
+        (isMaster ? localStorage.getItem('atelie_profile_user-luccy-default') : null) ||
+        (isMaster ? localStorage.getItem('atelie_profile_user-luccy-master') : null);
       if (saved) return JSON.parse(saved);
     } catch (e) {
       console.error(e);
     }
+    if (isMaster) return INITIAL_ATELIE_PROFILE;
     return {
       name: user.atelieName || 'Meu Ateliê',
       ownerName: user.name || 'Artesã',
@@ -189,23 +219,33 @@ export default function App() {
 
   // Helper to load user orders
   const loadUserOrders = (user: UserAccount): Order[] => {
+    const isMaster = isMasterUser(user);
     try {
-      const saved = localStorage.getItem(`atelie_orders_${user.id}`);
+      const saved =
+        localStorage.getItem(`atelie_orders_${user.id}`) ||
+        (isMaster ? localStorage.getItem('atelie_orders_user-luccy-default') : null) ||
+        (isMaster ? localStorage.getItem('atelie_orders_user-luccy-master') : null);
       if (saved) return JSON.parse(saved);
     } catch (e) {
       console.error(e);
     }
+    if (isMaster) return INITIAL_ORDERS;
     return [];
   };
 
   // Helper to load user catalog
   const loadUserCatalog = (user: UserAccount): CatalogItem[] => {
+    const isMaster = isMasterUser(user);
     try {
-      const saved = localStorage.getItem(`atelie_catalog_${user.id}`);
+      const saved =
+        localStorage.getItem(`atelie_catalog_${user.id}`) ||
+        (isMaster ? localStorage.getItem('atelie_catalog_user-luccy-default') : null) ||
+        (isMaster ? localStorage.getItem('atelie_catalog_user-luccy-master') : null);
       if (saved) return JSON.parse(saved);
     } catch (e) {
       console.error(e);
     }
+    if (isMaster) return INITIAL_CATALOG;
     return [];
   };
 
@@ -239,23 +279,33 @@ export default function App() {
 
   // Helper to load user quotations
   const loadUserQuotations = (user: UserAccount): Quotation[] => {
+    const isMaster = isMasterUser(user);
     try {
-      const saved = localStorage.getItem(`atelie_quotations_${user.id}`);
+      const saved =
+        localStorage.getItem(`atelie_quotations_${user.id}`) ||
+        (isMaster ? localStorage.getItem('atelie_quotations_user-luccy-default') : null) ||
+        (isMaster ? localStorage.getItem('atelie_quotations_user-luccy-master') : null);
       if (saved) return JSON.parse(saved);
     } catch (e) {
       console.error(e);
     }
+    if (isMaster) return INITIAL_QUOTATIONS;
     return [];
   };
 
   // Helper to load user clients
   const loadUserClients = (user: UserAccount): Client[] => {
+    const isMaster = isMasterUser(user);
     try {
-      const saved = localStorage.getItem(`atelie_clients_${user.id}`);
+      const saved =
+        localStorage.getItem(`atelie_clients_${user.id}`) ||
+        (isMaster ? localStorage.getItem('atelie_clients_user-luccy-default') : null) ||
+        (isMaster ? localStorage.getItem('atelie_clients_user-luccy-master') : null);
       if (saved) return JSON.parse(saved);
     } catch (e) {
       console.error(e);
     }
+    if (isMaster) return INITIAL_CLIENTS;
     return [];
   };
 

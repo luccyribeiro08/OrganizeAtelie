@@ -70,6 +70,7 @@ export const NovoPedidoView: React.FC<NovoPedidoViewProps> = ({
   onUpdateOrderTypes
 }) => {
   // Form State
+  const [selectedClientId, setSelectedClientId] = useState<string>('');
   const [clientName, setClientName] = useState('');
   const [clientPhone, setClientPhone] = useState('');
   const [clientInstagram, setClientInstagram] = useState('');
@@ -185,6 +186,7 @@ export const NovoPedidoView: React.FC<NovoPedidoViewProps> = ({
   // Populate from initialData (e.g. from Order Edit or Quote conversion)
   useEffect(() => {
     if (initialData) {
+      if (initialData.clientId) setSelectedClientId(initialData.clientId);
       if (initialData.clientName) setClientName(initialData.clientName);
       if (initialData.clientPhone) setClientPhone(initialData.clientPhone);
       if (initialData.clientInstagram) setClientInstagram(initialData.clientInstagram);
@@ -262,9 +264,8 @@ export const NovoPedidoView: React.FC<NovoPedidoViewProps> = ({
         }
       ]);
     } else {
-      // Default to the first catalog item price if available, or 0
-      const defaultPrice = catalog.length > 0 ? catalog[0].basePrice : 0;
-      const defaultName = catalog.length > 0 ? catalog[0].name : 'Item Personalizado';
+      const defaultName = theme ? `Item Tema ${theme}` : 'Item Personalizado';
+      const defaultPrice = 0.00;
       setItems((prev) => [
         ...prev,
         {
@@ -300,15 +301,17 @@ export const NovoPedidoView: React.FC<NovoPedidoViewProps> = ({
         const dataUrl = await readFileAsDataUrl(files[i]);
         urls.push(dataUrl);
       } catch (err) {
-        console.error('Erro ao processar foto da galeria', err);
+        console.error('Erro ao ler imagem:', err);
       }
     }
-    setMockupImages((prev) => [...prev, ...urls]);
+    if (urls.length > 0) {
+      setMockupImages((prev) => [...prev, ...urls]);
+    }
     e.target.value = '';
   };
 
-  const handleRemoveMockupImage = (index: number) => {
-    setMockupImages((prev) => prev.filter((_, i) => i !== index));
+  const handleRemoveMockupImage = (idx: number) => {
+    setMockupImages((prev) => prev.filter((_, i) => i !== idx));
   };
 
   // Days remaining calculation
@@ -324,11 +327,21 @@ export const NovoPedidoView: React.FC<NovoPedidoViewProps> = ({
       return;
     }
 
+    const cleanInputPhone = clientPhone.replace(/\D/g, '');
+    const matchedClient = selectedClientId
+      ? clients.find((c) => c.id === selectedClientId)
+      : clients.find(
+          (c) =>
+            c.name.trim().toLowerCase() === clientName.trim().toLowerCase() ||
+            (cleanInputPhone && cleanInputPhone.length >= 8 && c.phone.replace(/\D/g, '') === cleanInputPhone)
+        );
+
     const orderToSave: Order = {
       id: (initialData && initialData.id) ? initialData.id : `ped-${Date.now()}`,
       code: (initialData && initialData.code) ? initialData.code : `#PED-${Math.floor(1000 + Math.random() * 9000)}`,
+      clientId: matchedClient ? matchedClient.id : undefined,
       clientName: clientName.trim() || 'Cliente sem nome',
-      clientPhone: clientPhone.trim() || '(11) 90000-0000',
+      clientPhone: clientPhone.trim() || '',
       clientInstagram: clientInstagram.trim(),
       orderDate,
       deliveryDate,
@@ -490,6 +503,7 @@ export const NovoPedidoView: React.FC<NovoPedidoViewProps> = ({
                     <button
                       type="button"
                       onClick={() => {
+                        setSelectedClientId('');
                         setClientName('');
                         setClientPhone('');
                         setClientInstagram('');
@@ -504,15 +518,17 @@ export const NovoPedidoView: React.FC<NovoPedidoViewProps> = ({
 
                 <select
                   value={
+                    selectedClientId ||
                     clients.find(
                       (c) =>
                         c.name.trim().toLowerCase() === clientName.trim().toLowerCase() ||
-                        (clientPhone && c.phone.replace(/\D/g, '') === clientPhone.replace(/\D/g, ''))
+                        (clientPhone && clientPhone.replace(/\D/g, '') && c.phone.replace(/\D/g, '') === clientPhone.replace(/\D/g, ''))
                     )?.id || ''
                   }
                   onChange={(e) => {
                     const selected = clients.find((c) => c.id === e.target.value);
                     if (selected) {
+                      setSelectedClientId(selected.id);
                       setClientName(selected.name);
                       setClientPhone(selected.phone);
                       if (selected.instagram) setClientInstagram(selected.instagram);
@@ -529,6 +545,8 @@ export const NovoPedidoView: React.FC<NovoPedidoViewProps> = ({
                       if (selected.childName && !honoreeName) {
                         setHonoreeName(selected.childName);
                       }
+                    } else {
+                      setSelectedClientId('');
                     }
                   }}
                   className="w-full px-3.5 py-2.5 bg-white border border-pink-200 rounded-xl text-xs font-medium text-slate-800 focus:outline-hidden focus:ring-2 focus:ring-[#ac2471]/20 cursor-pointer"
@@ -556,7 +574,16 @@ export const NovoPedidoView: React.FC<NovoPedidoViewProps> = ({
                   id="input-cliente-nome"
                   type="text"
                   value={clientName}
-                  onChange={(e) => setClientName(e.target.value)}
+                  onChange={(e) => {
+                    setClientName(e.target.value);
+                    if (
+                      selectedClientId &&
+                      e.target.value.trim().toLowerCase() !==
+                        (clients.find((c) => c.id === selectedClientId)?.name || '').trim().toLowerCase()
+                    ) {
+                      setSelectedClientId('');
+                    }
+                  }}
                   placeholder="Ex: Maria Clara Silva"
                   className="w-full pl-10 pr-4 py-3 bg-[#f8f9fa] border border-[#f0e4e8] rounded-xl text-sm text-slate-800 placeholder-slate-400 focus:outline-hidden focus:ring-2 focus:ring-[#ac2471]/20 focus:border-[#ac2471] transition-all"
                 />

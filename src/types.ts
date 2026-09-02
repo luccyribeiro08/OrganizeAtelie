@@ -59,6 +59,7 @@ export interface FinancialDetails {
 export interface Order {
   id: string;
   code: string; // Ex: #PED-1042
+  clientId?: string; // ID do cliente vinculado (se selecionado do cadastro de clientes)
   clientName: string;
   clientPhone: string;
   clientInstagram?: string;

@@ -58,15 +58,37 @@ export const ClientesView: React.FC<ClientesViewProps> = ({
   const [zipCode, setZipCode] = useState('');
   const [notes, setNotes] = useState('');
 
-  // Helper: Get orders for a specific client (by matching phone or name)
+  // Helper: Get orders strictly for a specific client (by direct clientId, valid unique phone or exact full name)
   const getClientOrders = (client: Client): Order[] => {
-    const cleanPhone = client.phone.replace(/\D/g, '');
+    const cleanClientPhone = (client.phone || '').replace(/\D/g, '');
+    const cleanClientName = (client.name || '').trim().toLowerCase();
+
     return orders.filter((o) => {
+      // 1. Direct ID match if order was linked to this client
+      if (o.clientId) {
+        return o.clientId === client.id;
+      }
+
+      // 2. Strict Phone match (must have at least 8 digits and not be generic)
       const oCleanPhone = (o.clientPhone || '').replace(/\D/g, '');
-      const matchPhone = cleanPhone && oCleanPhone && cleanPhone === oCleanPhone;
-      const matchName =
-        o.clientName.trim().toLowerCase() === client.name.trim().toLowerCase();
-      return matchPhone || matchName;
+      const hasValidPhone = cleanClientPhone.length >= 8 && cleanClientPhone !== '11900000000';
+      if (hasValidPhone && oCleanPhone === cleanClientPhone) {
+        return true;
+      }
+
+      // 3. Exact Full Name match (only if non-empty, not generic, and exact match)
+      const oCleanName = (o.clientName || '').trim().toLowerCase();
+      if (
+        cleanClientName &&
+        oCleanName &&
+        cleanClientName === oCleanName &&
+        oCleanName !== 'cliente sem nome' &&
+        oCleanName !== 'cliente'
+      ) {
+        return true;
+      }
+
+      return false;
     });
   };
 

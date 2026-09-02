@@ -577,42 +577,6 @@ export default function App() {
       return updated;
     });
 
-    // Auto-register client if not already in clients list
-    if (savedOrder.clientName && savedOrder.clientName.trim() !== 'Cliente sem nome') {
-      const clientCleanPhone = (savedOrder.clientPhone || '').replace(/\D/g, '');
-      const existingClient = clients.find(
-        (c) =>
-          c.name.trim().toLowerCase() === savedOrder.clientName.trim().toLowerCase() ||
-          (clientCleanPhone && c.phone.replace(/\D/g, '') === clientCleanPhone)
-      );
-
-      if (!existingClient) {
-        const autoClient: Client = {
-          id: `cli-${Date.now()}`,
-          name: savedOrder.clientName.trim(),
-          phone: savedOrder.clientPhone || '',
-          instagram: savedOrder.clientInstagram,
-          address: savedOrder.deliveryAddress,
-          notes: savedOrder.personalization?.specialNotes,
-          createdAt: new Date().toISOString(),
-          updatedAt: new Date().toISOString(),
-        };
-
-        setClients((prev) => {
-          const updatedClients = [autoClient, ...prev];
-          if (currentUser) {
-            try {
-              localStorage.setItem(`atelie_clients_${currentUser.id}`, JSON.stringify(updatedClients));
-            } catch (e) {}
-            if (currentUser.id !== 'user-luccy-default') {
-              supabaseService.saveClient(currentUser.id, autoClient);
-            }
-          }
-          return updatedClients;
-        });
-      }
-    }
-
     setOrderDraftToCreate(null);
     if (currentUser && currentUser.id !== 'user-luccy-default') {
       supabaseService.saveOrder(currentUser.id, savedOrder);
@@ -805,6 +769,7 @@ export default function App() {
       .join(' - ');
 
     const partialOrder: Partial<Order> = {
+      clientId: client.id,
       clientName: client.name,
       clientPhone: client.phone,
       clientInstagram: client.instagram,

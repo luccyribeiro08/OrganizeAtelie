@@ -41,8 +41,10 @@ export const ConfiguracoesView: React.FC<ConfiguracoesViewProps> = ({
   const [savedSuccess, setSavedSuccess] = useState(false);
 
   // Password Change State
+  const [currentPassword, setCurrentPassword] = useState('');
   const [newPassword, setNewPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
+  const [showCurrentPwd, setShowCurrentPwd] = useState(false);
   const [showPwd, setShowPwd] = useState(false);
   const [pwdLoading, setPwdLoading] = useState(false);
   const [pwdSuccess, setPwdSuccess] = useState('');
@@ -88,19 +90,93 @@ export const ConfiguracoesView: React.FC<ConfiguracoesViewProps> = ({
     }
 
     setPwdLoading(true);
+
     try {
-      const { error } = await supabase.auth.updateUser({ password: newPassword });
-      if (error) {
-        setPwdError(error.message || 'Erro ao alterar a senha.');
-      } else {
-        setPwdSuccess('Senha atualizada com sucesso no Supabase!');
-        setNewPassword('');
-        setConfirmPassword('');
-        triggerConfetti();
-        setTimeout(() => setPwdSuccess(''), 4000);
+      // 1. Verifica se há sessão ativa no Supabase
+      const { data: sessionData } = await supabase.auth.getSession();
+      let hasActiveSession = Boolean(sessionData?.session);
+
+      // 2. Se a sessão expirou ou não existe, realiza login com a senha atual para reautenticar
+      if (!hasActiveSession) {
+        if (!currentPassword) {
+          setPwdError('Sua sessão de acesso expirou. Por favor, digite sua Senha Atual para confirmar a alteração.');
+          setPwdLoading(false);
+          return;
+        }
+
+        const { data: loginData, error: loginError } = await supabase.auth.signInWithPassword({
+          email: formData.email,
+          password: currentPassword,
+        });
+
+        if (loginError) {
+          setPwdError(`Senha atual incorreta: ${loginError.message}`);
+          setPwdLoading(false);
+          return;
+        }
+        hasActiveSession = Boolean(loginData?.session);
       }
+
+      // 3. Atualiza a senha no Supabase Auth
+      if (hasActiveSession) {
+        const { error: updateError } = await supabase.auth.updateUser({ password: newPassword });
+        if (updateError) {
+          // Se falhou por sessão, tenta reautenticar com senha atual se fornecida
+          if (currentPassword) {
+            await supabase.auth.signInWithPassword({
+              email: formData.email,
+              password: currentPassword,
+            });
+            const { error: retryError } = await supabase.auth.updateUser({ password: newPassword });
+            if (retryError) {
+              throw new Error(retryError.message);
+            }
+          } else {
+            throw new Error(updateError.message);
+          }
+        }
+      }
+
+      // 4. Atualiza os caches locais (dispositivo) para manter tudo sincronizado
+      try {
+        const currentSavedUserStr = localStorage.getItem('atelie_current_user_v3');
+        if (currentSavedUserStr) {
+          const u = JSON.parse(currentSavedUserStr);
+          u.password = newPassword;
+          localStorage.setItem('atelie_current_user_v3', JSON.stringify(u));
+        }
+
+        const lastDeviceStr = localStorage.getItem('atelie_saved_device_user_v2');
+        if (lastDeviceStr) {
+          const u = JSON.parse(lastDeviceStr);
+          u.password = newPassword;
+          localStorage.setItem('atelie_saved_device_user_v2', JSON.stringify(u));
+        }
+
+        const usersDbStr = localStorage.getItem('atelie_users_db_v2');
+        if (usersDbStr) {
+          const users = JSON.parse(usersDbStr);
+          if (Array.isArray(users)) {
+            const updatedUsers = users.map((u: any) =>
+              u.email?.toLowerCase() === formData.email?.toLowerCase()
+                ? { ...u, password: newPassword }
+                : u
+            );
+            localStorage.setItem('atelie_users_db_v2', JSON.stringify(updatedUsers));
+          }
+        }
+      } catch (e) {
+        console.error('Error updating local passwords', e);
+      }
+
+      setPwdSuccess('Senha alterada com sucesso!');
+      setCurrentPassword('');
+      setNewPassword('');
+      setConfirmPassword('');
+      triggerConfetti();
+      setTimeout(() => setPwdSuccess(''), 5000);
     } catch (err: any) {
-      setPwdError(err?.message || 'Erro ao comunicar com o servidor.');
+      setPwdError(err?.message || 'Erro ao alterar a senha no Supabase.');
     } finally {
       setPwdLoading(false);
     }
@@ -346,6 +422,28 @@ export const ConfiguracoesView: React.FC<ConfiguracoesViewProps> = ({
             )}
 
             <form onSubmit={handlePasswordChange} className="space-y-4">
+              <div>
+                <label className="block text-[11px] font-bold text-slate-500 uppercase mb-1">
+                  Senha Atual (para confirmar identidade)
+                </label>
+                <div className="relative">
+                  <input
+                    type={showCurrentPwd ? 'text' : 'password'}
+                    value={currentPassword}
+                    onChange={(e) => setCurrentPassword(e.target.value)}
+                    placeholder="Digite sua senha atual"
+                    className="w-full pl-3.5 pr-10 py-2.5 bg-[#f8f9fa] border border-[#f0e4e8] rounded-xl text-xs text-slate-800 focus:outline-hidden focus:border-[#ac2471]"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setShowCurrentPwd(!showCurrentPwd)}
+                    className="absolute inset-y-0 right-0 pr-3 flex items-center text-slate-400 hover:text-slate-600"
+                  >
+                    {showCurrentPwd ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                  </button>
+                </div>
+              </div>
+
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div>
                   <label className="block text-[11px] font-bold text-slate-500 uppercase mb-1">

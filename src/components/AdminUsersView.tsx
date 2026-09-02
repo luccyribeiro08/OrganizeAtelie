@@ -59,16 +59,27 @@ export const AdminUsersView: React.FC<AdminUsersViewProps> = ({
 
   useEffect(() => {
     fetchUsers();
+    supabaseService.getGlobalAdminMercadoPagoLinks().then((links) => {
+      if (links) {
+        setMpLinks({
+          mensal: links.mensal || '',
+          trimestral: links.trimestral || '',
+          anual: links.anual || '',
+          pixKey: links.pixKey || currentAdminProfile.pixKey || '',
+          whatsappAdmin: links.whatsappAdmin || currentAdminProfile.phone || '',
+        });
+      }
+    });
   }, []);
 
   const handleSaveMpLinks = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!currentAdminProfile.id) return;
+    const adminId = currentAdminProfile.id || 'user-sluccy45-master';
     setSavingLinks(true);
 
-    const success = await supabaseService.saveAdminMercadoPagoLinks(currentAdminProfile.id, mpLinks);
+    const success = await supabaseService.saveAdminMercadoPagoLinks(adminId, mpLinks);
     if (success) {
-      setSuccessMessage('Links do Mercado Pago salvos com sucesso!');
+      setSuccessMessage('Links do Mercado Pago salvos e sincronizados para todos os clientes!');
       if (onProfileUpdated) {
         onProfileUpdated({
           ...currentAdminProfile,

@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import {
   Check,
   CheckCircle2,
@@ -15,9 +15,10 @@ import {
   X,
   Zap,
 } from 'lucide-react';
-import { AtelieProfile } from '../types';
+import { AtelieProfile, MercadoPagoLinks } from '../types';
 import { getSubscriptionInfo } from '../utils/subscriptionUtils';
 import { createWhatsAppLink, formatCurrency } from '../utils/helpers';
+import { supabaseService } from '../services/supabaseService';
 
 interface SubscriptionModalProps {
   isOpen: boolean;
@@ -39,11 +40,24 @@ export const SubscriptionModal: React.FC<SubscriptionModalProps> = ({
   const [selectedPlan, setSelectedPlan] = useState<'mensal' | 'trimestral' | 'anual'>('trimestral');
   const [showPixDetails, setShowPixDetails] = useState(false);
   const [copiedPix, setCopiedPix] = useState(false);
+  const [globalLinks, setGlobalLinks] = useState<MercadoPagoLinks | null>(null);
+
+  // Carrega os links do Mercado Pago configurados pela Administradora Master
+  useEffect(() => {
+    if (!isOpen) return;
+    const fetchGlobalLinks = async () => {
+      const links = await supabaseService.getGlobalAdminMercadoPagoLinks();
+      if (links) {
+        setGlobalLinks(links);
+      }
+    };
+    fetchGlobalLinks();
+  }, [isOpen]);
 
   const subInfo = getSubscriptionInfo(profile);
 
-  // Mercado Pago links from profile or fallback defaults
-  const mpLinks = profile?.mercadoPagoLinks || {};
+  // Mercado Pago links from global admin config, profile, or fallback defaults
+  const mpLinks = globalLinks || profile?.mercadoPagoLinks || {};
   const currentPixKey = mpLinks.pixKey || adminPixKey || profile?.pixKey || '21973389309';
   const supportPhone = mpLinks.whatsappAdmin || adminContactPhone || '21973389309';
 
@@ -118,10 +132,14 @@ export const SubscriptionModal: React.FC<SubscriptionModalProps> = ({
   };
 
   const handlePay = (plan: typeof plans[0]) => {
-    if (plan.mpLink && plan.mpLink.trim().startsWith('http')) {
-      window.open(plan.mpLink, '_blank');
+    const rawLink = plan.mpLink?.trim() || '';
+    if (rawLink) {
+      const targetUrl = rawLink.startsWith('http://') || rawLink.startsWith('https://')
+        ? rawLink
+        : `https://${rawLink}`;
+      window.open(targetUrl, '_blank');
     } else {
-      // If no custom Mercado Pago link configured yet, open direct PIX / WhatsApp checkout
+      // Se ainda não houver link do Mercado Pago configurado, abre a opção de PIX / WhatsApp
       setShowPixDetails(true);
     }
   };

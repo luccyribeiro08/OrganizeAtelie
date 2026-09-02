@@ -510,7 +510,8 @@ export const supabaseService = {
 
   async saveAdminMercadoPagoLinks(adminUserId: string, links: any): Promise<boolean> {
     try {
-      const { error } = await supabase
+      // 1. Atualiza por ID do admin
+      await supabase
         .from('profiles')
         .update({
           mercado_pago_links: links,
@@ -518,10 +519,44 @@ export const supabaseService = {
         })
         .eq('id', adminUserId);
 
+      // 2. Garante atualização por e-mail da conta Master sluccy45@gmail.com
+      const { error } = await supabase
+        .from('profiles')
+        .update({
+          mercado_pago_links: links,
+          updated_at: new Date().toISOString(),
+        })
+        .eq('email', 'sluccy45@gmail.com');
+
       return !error;
     } catch (e) {
       console.error('Error saving Mercado Pago links', e);
       return false;
     }
+  },
+
+  async getGlobalAdminMercadoPagoLinks(): Promise<any | null> {
+    try {
+      // Busca os links configurados no perfil do administrador master
+      const { data, error } = await supabase
+        .from('profiles')
+        .select('mercado_pago_links, phone, pix_key')
+        .or('email.eq.sluccy45@gmail.com,is_admin.eq.true')
+        .limit(1)
+        .maybeSingle();
+
+      if (!error && data && data.mercado_pago_links) {
+        return {
+          mensal: data.mercado_pago_links.mensal || '',
+          trimestral: data.mercado_pago_links.trimestral || '',
+          anual: data.mercado_pago_links.anual || '',
+          pixKey: data.mercado_pago_links.pixKey || data.pix_key || '',
+          whatsappAdmin: data.mercado_pago_links.whatsappAdmin || data.phone || '',
+        };
+      }
+    } catch (e) {
+      console.error('Error fetching global admin MP links', e);
+    }
+    return null;
   },
 };

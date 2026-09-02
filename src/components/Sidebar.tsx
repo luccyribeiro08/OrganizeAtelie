@@ -201,7 +201,10 @@ export const Sidebar: React.FC<SidebarProps> = ({
           )}
 
           {isAdmin ? (
-            <div className="w-full flex items-center justify-between px-4 py-2.5 rounded-2xl text-xs font-bold text-purple-900 bg-purple-50 border border-purple-200 shadow-2xs">
+            <button
+              onClick={onOpenPlans}
+              className="w-full flex items-center justify-between px-4 py-2.5 rounded-2xl text-xs font-bold text-purple-900 bg-purple-50 hover:bg-purple-100/80 border border-purple-200 shadow-2xs transition-all active:scale-95 cursor-pointer"
+            >
               <div className="flex items-center gap-2">
                 <Crown className="w-4 h-4 text-amber-500" />
                 <span>Acesso Vitalício</span>
@@ -209,7 +212,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
               <span className="text-[10px] px-2 py-0.5 rounded-full bg-purple-700 text-white font-extrabold">
                 Master
               </span>
-            </div>
+            </button>
           ) : (
             onOpenPlans && (
               <button

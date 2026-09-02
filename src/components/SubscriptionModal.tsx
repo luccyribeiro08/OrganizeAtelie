@@ -56,6 +56,70 @@ export const SubscriptionModal: React.FC<SubscriptionModalProps> = ({
 
   const subInfo = getSubscriptionInfo(profile);
 
+  // Render dedicated Master Vitalício Modal for Admin (no pricing/sale options)
+  if (subInfo.isAdmin) {
+    return (
+      <div className="fixed inset-0 bg-black/70 backdrop-blur-xs z-50 flex items-center justify-center p-3 sm:p-4 overflow-y-auto">
+        <div className="bg-white rounded-3xl max-w-md w-full p-6 sm:p-8 shadow-2xl border border-purple-100 space-y-6 animate-in fade-in zoom-in-95 my-6 text-center relative">
+          <button
+            onClick={onClose}
+            className="absolute top-4 right-4 p-2 text-slate-400 hover:text-slate-700 rounded-xl hover:bg-pink-50 transition-colors"
+          >
+            <X className="w-5 h-5" />
+          </button>
+
+          {/* Crown Icon */}
+          <div className="mx-auto w-16 h-16 rounded-3xl bg-gradient-to-tr from-purple-800 to-[#ac2471] flex items-center justify-center text-white shadow-lg shadow-purple-200">
+            <Crown className="w-8 h-8 text-amber-300" />
+          </div>
+
+          {/* Title & Badge */}
+          <div className="space-y-2">
+            <span className="inline-flex items-center gap-1 px-3 py-1 rounded-full bg-purple-100 text-purple-800 text-xs font-bold border border-purple-200">
+              <Sparkles className="w-3.5 h-3.5 text-amber-500" />
+              Administradora Master
+            </span>
+            <h2 className="text-2xl font-heading font-extrabold text-slate-900">
+              Acesso Vitalício Ativado
+            </h2>
+            <p className="text-xs sm:text-sm text-slate-600 leading-relaxed">
+              Sua conta possui <strong>Acesso Vitalício Permanente</strong> ao Organize Ateliê. Você tem liberação ilimitada de todos os recursos sem mensalidades ou prazos de expiração.
+            </p>
+          </div>
+
+          {/* Feature List */}
+          <div className="bg-purple-50/70 border border-purple-100 rounded-2xl p-4 text-left space-y-2.5 text-xs text-purple-950">
+            <div className="flex items-center gap-2">
+              <CheckCircle2 className="w-4 h-4 text-emerald-600 flex-shrink-0" />
+              <span><strong>Pedidos, Clientes & Catálogo:</strong> Criação Ilimitada</span>
+            </div>
+            <div className="flex items-center gap-2">
+              <CheckCircle2 className="w-4 h-4 text-emerald-600 flex-shrink-0" />
+              <span><strong>Painel Admin:</strong> Gerenciamento total de clientes</span>
+            </div>
+            <div className="flex items-center gap-2">
+              <CheckCircle2 className="w-4 h-4 text-emerald-600 flex-shrink-0" />
+              <span><strong>Vendas & Mercado Pago:</strong> Links globais ativos</span>
+            </div>
+            <div className="flex items-center gap-2">
+              <CheckCircle2 className="w-4 h-4 text-emerald-600 flex-shrink-0" />
+              <span><strong>Validade:</strong> Vitalício (Nunca expira)</span>
+            </div>
+          </div>
+
+          {/* Close Button */}
+          <button
+            type="button"
+            onClick={onClose}
+            className="w-full py-3 px-4 rounded-xl bg-gradient-to-r from-purple-800 to-[#ac2471] hover:from-purple-900 hover:to-pink-700 text-white font-bold text-sm shadow-md transition-all active:scale-95 cursor-pointer"
+          >
+            Entendido, Continuar no Ateliê ✨
+          </button>
+        </div>
+      </div>
+    );
+  }
+
   // Mercado Pago links from global admin config, profile, or fallback defaults
   const mpLinks = globalLinks || profile?.mercadoPagoLinks || {};
   const currentPixKey = mpLinks.pixKey || adminPixKey || profile?.pixKey || '21973389309';

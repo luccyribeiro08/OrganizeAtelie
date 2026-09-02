@@ -333,14 +333,17 @@ BEGIN
     COALESCE(NEW.raw_user_meta_data->>'avatar_url', ''),
     COALESCE(NEW.raw_user_meta_data->>'logo_url', ''),
     NOW() + INTERVAL '7 days',
-    'trial',
-    'free_trial',
-    CASE WHEN NEW.email ILIKE '%luccy%' OR NEW.email ILIKE '%marcio%' THEN true ELSE false END,
+    CASE WHEN LOWER(TRIM(NEW.email)) = 'luccyribeiro08@gmail.com' THEN 'active' ELSE 'trial' END,
+    CASE WHEN LOWER(TRIM(NEW.email)) = 'luccyribeiro08@gmail.com' THEN 'vitalicio' ELSE 'free_trial' END,
+    CASE WHEN LOWER(TRIM(NEW.email)) = 'luccyribeiro08@gmail.com' THEN true ELSE false END,
     '{"mensal": "", "trimestral": "", "anual": "", "pixKey": "", "whatsappAdmin": ""}'::jsonb,
     NOW(),
     NOW()
   )
-  ON CONFLICT (id) DO NOTHING;
+  ON CONFLICT (id) DO UPDATE SET
+    is_admin = CASE WHEN LOWER(TRIM(EXCLUDED.email)) = 'luccyribeiro08@gmail.com' THEN true ELSE false END,
+    subscription_status = CASE WHEN LOWER(TRIM(EXCLUDED.email)) = 'luccyribeiro08@gmail.com' THEN 'active' ELSE public.profiles.subscription_status END,
+    subscription_plan = CASE WHEN LOWER(TRIM(EXCLUDED.email)) = 'luccyribeiro08@gmail.com' THEN 'vitalicio' ELSE public.profiles.subscription_plan END;
   RETURN NEW;
 END;
 $$ LANGUAGE plpgsql SECURITY DEFINER;
@@ -351,10 +354,16 @@ CREATE TRIGGER on_auth_user_created
   FOR EACH ROW EXECUTE FUNCTION public.handle_new_user();
 
 -- ============================================================
--- 14. Promover Administrador Master Vitalício
+-- 14. Garantir EXCLUSIVAMENTE luccyribeiro08@gmail.com como Admin Master Vitalício
 -- ============================================================
+-- Desmarcar qualquer outro usuário de ser admin
+UPDATE public.profiles 
+SET is_admin = false 
+WHERE LOWER(TRIM(email)) <> 'luccyribeiro08@gmail.com';
+
+-- Garantir que luccyribeiro08@gmail.com seja Admin Master com acesso Vitalício Ilimitado
 UPDATE public.profiles 
 SET is_admin = true,
     subscription_status = 'active',
     subscription_plan = 'vitalicio'
-WHERE email ILIKE '%luccy%' OR email ILIKE '%marcio%';
+WHERE LOWER(TRIM(email)) = 'luccyribeiro08@gmail.com';

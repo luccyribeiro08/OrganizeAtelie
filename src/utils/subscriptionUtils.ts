@@ -33,15 +33,11 @@ export function getSubscriptionInfo(profile: AtelieProfile | null): Subscription
     };
   }
 
-  // 1. Admin Check
-  const isAdmin =
-    Boolean(profile.isAdmin) ||
-    Boolean(
-      profile.email &&
-        (profile.email.toLowerCase().includes('marcio') ||
-          profile.email.toLowerCase().includes('luccy') ||
-          profile.role === 'Administrador Master')
-    );
+  // 1. Admin Check (Exclusivo para luccyribeiro08@gmail.com)
+  const isTargetAdminEmail = Boolean(
+    profile.email && profile.email.trim().toLowerCase() === 'luccyribeiro08@gmail.com'
+  );
+  const isAdmin = isTargetAdminEmail || Boolean(profile.isAdmin && isTargetAdminEmail);
 
   if (isAdmin) {
     return {

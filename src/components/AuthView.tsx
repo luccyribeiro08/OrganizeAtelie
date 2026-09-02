@@ -347,7 +347,7 @@ export const AuthView: React.FC<AuthViewProps> = ({
                   required
                   value={loginIdentifier}
                   onChange={(e) => setLoginIdentifier(e.target.value)}
-                  placeholder="ex: luccy@atelie.com"
+                  placeholder="seuemail@exemplo.com"
                   className="w-full pl-10 pr-4 py-2.5 bg-[#f8f9fa] border border-[#f0e4e8] rounded-2xl text-xs text-slate-800 focus:outline-hidden focus:border-[#ac2471] focus:bg-white"
                 />
               </div>

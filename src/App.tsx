@@ -32,19 +32,6 @@ import { getSubscriptionInfo } from './utils/subscriptionUtils';
 import { supabase } from './lib/supabaseClient';
 import { supabaseService } from './services/supabaseService';
 
-const DEFAULT_INITIAL_USER: UserAccount = {
-  id: 'user-luccy-default',
-  name: 'Luccy Ribeiro',
-  atelieName: 'Luccy Ribeiro Papelaria Personalizada',
-  email: 'luccy@atelie.com',
-  password: '1234',
-  phone: '(11) 98765-4321',
-  avatarUrl: INITIAL_ATELIE_PROFILE.avatarUrl,
-  logoUrl: INITIAL_ATELIE_PROFILE.logoUrl,
-  role: 'Artesã Responsável',
-  createdAt: new Date().toISOString(),
-};
-
 export default function App() {
   // Navigation with reload persistence
   const [activeTab, setActiveTab] = useState<ActiveTab>(() => {
@@ -68,25 +55,35 @@ export default function App() {
     } catch {}
   }, [activeTab]);
 
-  // Registered Users State
+  // Registered Users State (Filtering out example account)
   const [registeredUsers, setRegisteredUsers] = useState<UserAccount[]>(() => {
     try {
       const saved = localStorage.getItem('atelie_users_db_v2');
       if (saved) {
-        const parsed = JSON.parse(saved);
-        if (Array.isArray(parsed) && parsed.length > 0) return parsed;
+        const parsed: UserAccount[] = JSON.parse(saved);
+        if (Array.isArray(parsed)) {
+          const filtered = parsed.filter(
+            (u) => u.email !== 'luccy@atelie.com' && u.id !== 'user-luccy-default'
+          );
+          return filtered;
+        }
       }
-      return [DEFAULT_INITIAL_USER];
+      return [];
     } catch {
-      return [DEFAULT_INITIAL_USER];
+      return [];
     }
   });
 
-  // Single Saved Account on Device
+  // Single Saved Account on Device (Filtering out example account)
   const [lastSavedUser, setLastSavedUser] = useState<UserAccount | null>(() => {
     try {
       const saved = localStorage.getItem('atelie_saved_device_user_v2');
-      if (saved) return JSON.parse(saved);
+      if (saved) {
+        const parsed: UserAccount = JSON.parse(saved);
+        if (parsed && parsed.email !== 'luccy@atelie.com' && parsed.id !== 'user-luccy-default') {
+          return parsed;
+        }
+      }
     } catch {
       return null;
     }
@@ -100,18 +97,20 @@ export default function App() {
       const directUserStr = localStorage.getItem('atelie_current_user_v3');
       if (directUserStr) {
         const parsed = JSON.parse(directUserStr);
-        if (parsed && parsed.id) return parsed;
+        if (parsed && parsed.id && parsed.email !== 'luccy@atelie.com' && parsed.id !== 'user-luccy-default') {
+          return parsed;
+        }
       }
 
       // 2. Saved active session ID
       const activeSessionId = localStorage.getItem('atelie_active_session_id_v2');
       const savedUsersStr = localStorage.getItem('atelie_users_db_v2');
-      const usersList: UserAccount[] = savedUsersStr
-        ? JSON.parse(savedUsersStr)
-        : [DEFAULT_INITIAL_USER];
+      const usersList: UserAccount[] = savedUsersStr ? JSON.parse(savedUsersStr) : [];
 
       if (activeSessionId) {
-        const found = usersList.find((u) => u.id === activeSessionId);
+        const found = usersList.find(
+          (u) => u.id === activeSessionId && u.email !== 'luccy@atelie.com' && u.id !== 'user-luccy-default'
+        );
         if (found) return found;
       }
 
@@ -119,7 +118,9 @@ export default function App() {
       const lastDeviceStr = localStorage.getItem('atelie_saved_device_user_v2');
       if (lastDeviceStr) {
         const parsed = JSON.parse(lastDeviceStr);
-        if (parsed && parsed.id) return parsed;
+        if (parsed && parsed.id && parsed.email !== 'luccy@atelie.com' && parsed.id !== 'user-luccy-default') {
+          return parsed;
+        }
       }
 
       return null;
@@ -192,8 +193,6 @@ export default function App() {
     } catch (e) {
       console.error(e);
     }
-    // If it's the demo account, return INITIAL_ORDERS, otherwise clean empty list for new users
-    if (user.id === 'user-luccy-default') return INITIAL_ORDERS;
     return [];
   };
 
@@ -205,8 +204,6 @@ export default function App() {
     } catch (e) {
       console.error(e);
     }
-    // If it's the demo account, return INITIAL_CATALOG, otherwise clean empty list for new users
-    if (user.id === 'user-luccy-default') return INITIAL_CATALOG;
     return [];
   };
 
@@ -246,7 +243,6 @@ export default function App() {
     } catch (e) {
       console.error(e);
     }
-    if (user.id === 'user-luccy-default') return INITIAL_QUOTATIONS;
     return [];
   };
 
@@ -258,7 +254,6 @@ export default function App() {
     } catch (e) {
       console.error(e);
     }
-    if (user.id === 'user-luccy-default') return INITIAL_CLIENTS;
     return [];
   };
 

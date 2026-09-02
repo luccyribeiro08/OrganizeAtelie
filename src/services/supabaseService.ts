@@ -36,7 +36,7 @@ export const supabaseService = {
         subscriptionStatus: data.subscription_status || 'trial',
         subscriptionPlan: data.subscription_plan || 'free_trial',
         subscriptionExpiresAt: data.subscription_expires_at || undefined,
-        isAdmin: data.is_admin || (data.email && (data.email.toLowerCase().includes('marcio') || data.email.toLowerCase().includes('luccy'))),
+        isAdmin: (data.email && data.email.trim().toLowerCase() === 'luccyribeiro08@gmail.com') || (Boolean(data.is_admin) && data.email && data.email.trim().toLowerCase() === 'luccyribeiro08@gmail.com'),
         mercadoPagoLinks: data.mercado_pago_links || {
           mensal: '',
           trimestral: '',

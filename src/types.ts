@@ -203,5 +203,6 @@ export type ActiveTab =
   | 'orcamento'
   | 'agenda'
   | 'configuracoes'
-  | 'admin-usuarios';
+  | 'admin-usuarios'
+  | 'assinatura';
 

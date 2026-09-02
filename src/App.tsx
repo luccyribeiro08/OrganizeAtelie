@@ -16,6 +16,8 @@ import { OrderInProductionNotificationModal } from './components/OrderInProducti
 import { AuthView } from './components/AuthView';
 import { SubscriptionBanner } from './components/SubscriptionBanner';
 import { SubscriptionModal } from './components/SubscriptionModal';
+import { SubscriptionGuard } from './components/SubscriptionGuard';
+import { SubscriptionView } from './components/SubscriptionView';
 import { AdminUsersView } from './components/AdminUsersView';
 import { ActiveTab, AtelieProfile, CatalogItem, Client, Order, OrderStatus, Quotation, UserAccount } from './types';
 import {
@@ -33,13 +35,32 @@ import { supabase } from './lib/supabaseClient';
 import { supabaseService } from './services/supabaseService';
 
 export default function App() {
-  // Navigation with reload persistence
+  // Navigation with reload persistence & /assinatura URL routing
   const [activeTab, setActiveTab] = useState<ActiveTab>(() => {
+    if (typeof window !== 'undefined') {
+      if (
+        window.location.pathname === '/assinatura' ||
+        window.location.hash === '#/assinatura' ||
+        window.location.hash === '#assinatura'
+      ) {
+        return 'assinatura';
+      }
+    }
     try {
       const savedTab = localStorage.getItem('atelie_active_tab_v2');
       if (
         savedTab &&
-        ['pedidos', 'criar-pedido', 'clientes', 'catalogo', 'orcamento', 'agenda', 'configuracoes'].includes(savedTab)
+        [
+          'pedidos',
+          'criar-pedido',
+          'clientes',
+          'catalogo',
+          'orcamento',
+          'agenda',
+          'configuracoes',
+          'admin-usuarios',
+          'assinatura',
+        ].includes(savedTab)
       ) {
         return savedTab as ActiveTab;
       }
@@ -47,6 +68,25 @@ export default function App() {
     return 'pedidos';
   });
   const [isOpenMobile, setIsOpenMobile] = useState(false);
+
+  // Escuta mudanças de URL / Hash (ex: #/assinatura ou /assinatura)
+  useEffect(() => {
+    const handleUrlChange = () => {
+      if (
+        window.location.pathname === '/assinatura' ||
+        window.location.hash === '#/assinatura' ||
+        window.location.hash === '#assinatura'
+      ) {
+        setActiveTab('assinatura');
+      }
+    };
+    window.addEventListener('hashchange', handleUrlChange);
+    window.addEventListener('popstate', handleUrlChange);
+    return () => {
+      window.removeEventListener('hashchange', handleUrlChange);
+      window.removeEventListener('popstate', handleUrlChange);
+    };
+  }, []);
 
   // Persist activeTab on change
   useEffect(() => {
@@ -1138,7 +1178,7 @@ export default function App() {
         atelierName={profile.name}
         onLogout={handleLogout}
         isAdmin={subInfo.isAdmin}
-        onOpenPlans={() => setIsSubscriptionModalOpen(true)}
+        onOpenPlans={() => setActiveTab('assinatura')}
         statusBadgeText={subInfo.statusBadgeText}
         statusBadgeClass={subInfo.statusBadgeClass}
       />
@@ -1148,7 +1188,7 @@ export default function App() {
         {/* Subscription & Trial Alert Banner */}
         <SubscriptionBanner
           profile={profile}
-          onOpenPlans={() => setIsSubscriptionModalOpen(true)}
+          onOpenPlans={() => setActiveTab('assinatura')}
           onOpenAdmin={() => setActiveTab('admin-usuarios')}
         />
 
@@ -1166,78 +1206,114 @@ export default function App() {
         {/* View Routing */}
         <main className="flex-1">
           {activeTab === 'criar-pedido' && (
-            <NovoPedidoView
-              catalog={catalog}
-              clients={clients}
-              orderTypes={orderTypes}
-              initialData={orderDraftToCreate}
-              onClearInitialData={() => setOrderDraftToCreate(null)}
-              onSaveOrder={handleSaveOrder}
-              onNavigateToCatalog={() => setActiveTab('catalogo')}
-              onUpdateOrderTypes={handleUpdateOrderTypes}
-            />
+            <SubscriptionGuard
+              profile={profile}
+              userId={currentUser?.id}
+              onNavigateToSubscription={() => setActiveTab('assinatura')}
+            >
+              <NovoPedidoView
+                catalog={catalog}
+                clients={clients}
+                orderTypes={orderTypes}
+                initialData={orderDraftToCreate}
+                onClearInitialData={() => setOrderDraftToCreate(null)}
+                onSaveOrder={handleSaveOrder}
+                onNavigateToCatalog={() => setActiveTab('catalogo')}
+                onUpdateOrderTypes={handleUpdateOrderTypes}
+              />
+            </SubscriptionGuard>
           )}
 
           {activeTab === 'pedidos' && (
-            <PedidosView
-              orders={orders}
+            <SubscriptionGuard
               profile={profile}
-              onSelectOrder={(ord) => setSelectedOrder(ord)}
-              onEditOrder={handleEditOrder}
-              onPrintOrder={(ord) => setOrderToPrint(ord)}
-              onUpdateStatus={handleUpdateStatus}
-              onDeleteOrder={handleDeleteOrder}
-              onNavigateToNewOrder={() => {
-                if (!subInfo.canPerformAction) {
-                  setIsSubscriptionModalOpen(true);
-                  return;
-                }
-                setActiveTab('criar-pedido');
-              }}
-              onNotifyInProduction={(ord) => setOrderInProductionForNotification(ord)}
-              onNotifyReady={(ord) => setOrderReadyForNotification(ord)}
-              onNotifyCompleted={(ord) => setOrderCompletedForNotification(ord)}
-            />
+              userId={currentUser?.id}
+              onNavigateToSubscription={() => setActiveTab('assinatura')}
+            >
+              <PedidosView
+                orders={orders}
+                profile={profile}
+                onSelectOrder={(ord) => setSelectedOrder(ord)}
+                onEditOrder={handleEditOrder}
+                onPrintOrder={(ord) => setOrderToPrint(ord)}
+                onUpdateStatus={handleUpdateStatus}
+                onDeleteOrder={handleDeleteOrder}
+                onNavigateToNewOrder={() => {
+                  if (!subInfo.canPerformAction) {
+                    setActiveTab('assinatura');
+                    return;
+                  }
+                  setActiveTab('criar-pedido');
+                }}
+                onNotifyInProduction={(ord) => setOrderInProductionForNotification(ord)}
+                onNotifyReady={(ord) => setOrderReadyForNotification(ord)}
+                onNotifyCompleted={(ord) => setOrderCompletedForNotification(ord)}
+              />
+            </SubscriptionGuard>
           )}
 
           {activeTab === 'clientes' && (
-            <ClientesView
-              clients={clients}
-              orders={orders}
-              onAddClient={handleAddClient}
-              onUpdateClient={handleUpdateClient}
-              onDeleteClient={handleDeleteClient}
-              onSelectClientForOrder={handleSelectClientForOrder}
-            />
+            <SubscriptionGuard
+              profile={profile}
+              userId={currentUser?.id}
+              onNavigateToSubscription={() => setActiveTab('assinatura')}
+            >
+              <ClientesView
+                clients={clients}
+                orders={orders}
+                onAddClient={handleAddClient}
+                onUpdateClient={handleUpdateClient}
+                onDeleteClient={handleDeleteClient}
+                onSelectClientForOrder={handleSelectClientForOrder}
+              />
+            </SubscriptionGuard>
           )}
 
           {activeTab === 'catalogo' && (
-            <CatalogoView
-              catalog={catalog}
-              categories={catalogCategories}
-              onAddCatalogItem={handleAddCatalogItem}
-              onUpdateCatalogItem={handleUpdateCatalogItem}
-              onDeleteCatalogItem={handleDeleteCatalogItem}
-              onSelectProductForOrder={handleSelectProductForOrder}
-              onUpdateCategories={handleUpdateCategories}
-            />
+            <SubscriptionGuard
+              profile={profile}
+              userId={currentUser?.id}
+              onNavigateToSubscription={() => setActiveTab('assinatura')}
+            >
+              <CatalogoView
+                catalog={catalog}
+                categories={catalogCategories}
+                onAddCatalogItem={handleAddCatalogItem}
+                onUpdateCatalogItem={handleUpdateCatalogItem}
+                onDeleteCatalogItem={handleDeleteCatalogItem}
+                onSelectProductForOrder={handleSelectProductForOrder}
+                onUpdateCategories={handleUpdateCategories}
+              />
+            </SubscriptionGuard>
           )}
 
           {activeTab === 'orcamento' && (
-            <OrcamentoView
-              quotations={quotations}
-              onSaveQuotation={handleSaveQuotation}
-              onDeleteQuotation={handleDeleteQuotation}
-              onApproveAndCreateOrder={handleApproveAndCreateOrder}
+            <SubscriptionGuard
               profile={profile}
-            />
+              userId={currentUser?.id}
+              onNavigateToSubscription={() => setActiveTab('assinatura')}
+            >
+              <OrcamentoView
+                quotations={quotations}
+                onSaveQuotation={handleSaveQuotation}
+                onDeleteQuotation={handleDeleteQuotation}
+                onApproveAndCreateOrder={handleApproveAndCreateOrder}
+                profile={profile}
+              />
+            </SubscriptionGuard>
           )}
 
           {activeTab === 'agenda' && (
-            <AgendaView
-              orders={orders}
-              onSelectOrder={(ord) => setSelectedOrder(ord)}
-            />
+            <SubscriptionGuard
+              profile={profile}
+              userId={currentUser?.id}
+              onNavigateToSubscription={() => setActiveTab('assinatura')}
+            >
+              <AgendaView
+                orders={orders}
+                onSelectOrder={(ord) => setSelectedOrder(ord)}
+              />
+            </SubscriptionGuard>
           )}
 
           {activeTab === 'configuracoes' && (
@@ -1246,6 +1322,14 @@ export default function App() {
               onUpdateProfile={handleUpdateProfile}
               onExportData={handleExportData}
               onImportData={handleImportData}
+            />
+          )}
+
+          {activeTab === 'assinatura' && (
+            <SubscriptionView
+              profile={profile}
+              onProfileUpdated={handleUpdateProfile}
+              onNavigateHome={() => setActiveTab('pedidos')}
             />
           )}
 

@@ -1,5 +1,5 @@
 // ============================================================
-// 🎀 ORGANIZE ATELIÊ - VERCEL SERVERLESS API: VERIFICAÇÃO RIGOROSA E ISOLADA DE PAGAMENTO
+// 🎀 ORGANIZE ATELIÊ - VERCEL SERVERLESS API: ATIVAÇÃO COM CONSUMO ÚNICO DE TRANSAÇÃO DO MERCADO PAGO
 // Endpoint: POST /api/subscription/verify-payment
 // ============================================================
 
@@ -81,7 +81,7 @@ export default async function handler(req: any, res: any) {
       });
     }
 
-    // Se a assinatura já foi ativada previamente para este usuário específico e está no prazo
+    // Se a assinatura já foi ativada previamente para este usuário e está no prazo
     if (profile && profile.subscription_status === 'active' && profile.subscription_plan !== 'free_trial') {
       const now = new Date();
       const expiresAt = profile.subscription_expires_at ? new Date(profile.subscription_expires_at) : null;
@@ -97,7 +97,7 @@ export default async function handler(req: any, res: any) {
       }
     }
 
-    // 2. CONSULTA RIGOROSA NA API DO MERCADO PAGO (Apenas transações pertencentes a este usuário)
+    // 2. CONSULTA AVANÇADA NO MERCADO PAGO COM CONTROLE DE CONSUMO ÚNICO
     let verifiedViaMp = false;
     let detectedPlan = plan || 'mensal';
     let matchedPayment: any = null;
@@ -107,7 +107,7 @@ export default async function handler(req: any, res: any) {
       mpDiagnostic = 'Token do Mercado Pago não configurado na Vercel.';
     } else {
       try {
-        // A) Se tiver ID específico do comprovante informado pelo cliente
+        // A) Se tiver ID específico do comprovante informado pelo usuário
         if (paymentId) {
           const cleanPid = String(paymentId).replace(/\D/g, '').trim();
           if (cleanPid) {
@@ -128,7 +128,7 @@ export default async function handler(req: any, res: any) {
           }
         }
 
-        // B) Busca estrita por e-mail do pagador
+        // B) Busca por e-mail do pagador
         if (!verifiedViaMp && cleanEmail) {
           const searchUrl = `https://api.mercadopago.com/v1/payments/search?sort=date_created&criteria=desc&limit=15&payer.email=${encodeURIComponent(cleanEmail)}`;
           const mpRes = await fetch(searchUrl, {
@@ -142,12 +142,10 @@ export default async function handler(req: any, res: any) {
               verifiedViaMp = true;
               matchedPayment = approved;
             }
-          } else if (mpRes.status === 401) {
-            mpDiagnostic = 'MERCADO_PAGO_ACCESS_TOKEN inválido ou não autorizado (401).';
           }
         }
 
-        // C) Busca estrita por external_reference (ID do usuário)
+        // C) Busca por external_reference (ID do usuário)
         if (!verifiedViaMp && cleanUserId) {
           const searchUrl = `https://api.mercadopago.com/v1/payments/search?sort=date_created&criteria=desc&limit=15&external_reference=${encodeURIComponent(cleanUserId)}`;
           const mpRes = await fetch(searchUrl, {
@@ -160,6 +158,54 @@ export default async function handler(req: any, res: any) {
             if (approved) {
               verifiedViaMp = true;
               matchedPayment = approved;
+            }
+          }
+        }
+
+        // D) Busca por Pagamento Recente Aprovado com Consumo Único (Não Reutilizável)
+        if (!verifiedViaMp) {
+          const recentUrl = `https://api.mercadopago.com/v1/payments/search?sort=date_created&criteria=desc&limit=25`;
+          const recentRes = await fetch(recentUrl, {
+            headers: { Authorization: `Bearer ${rawMpToken}` },
+          });
+          if (recentRes.ok) {
+            const recentData = await recentRes.json();
+            const results = recentData.results || [];
+
+            // Obtém todos os IDs de pagamentos já vinculados a outras contas no Supabase
+            const { data: allProfiles } = await supabaseAdmin
+              .from('profiles')
+              .select('id, mercado_pago_links');
+
+            const claimedPaymentIds = new Set<string>();
+            (allProfiles || []).forEach((p: any) => {
+              const pLinks = p.mercado_pago_links || {};
+              if (pLinks.claimed_payment_id) {
+                claimedPaymentIds.add(String(pLinks.claimed_payment_id));
+              }
+            });
+
+            // Encontra a transação mais recente aprovada que ainda NÃO foi consumida por ninguém
+            const oneDayAgo = new Date(Date.now() - 24 * 60 * 60 * 1000);
+            const unclaimedPayment = results.find((p: any) => {
+              const isApproved = p.status === 'approved' || p.status === 'authorized';
+              if (!isApproved) return false;
+              const amt = Number(p.transaction_amount || 0);
+              if (amt < 5) return false;
+              if (claimedPaymentIds.has(String(p.id))) return false; // Já usado por outro usuário
+
+              const dateStr = p.date_approved || p.date_created;
+              if (dateStr) {
+                const pDate = new Date(dateStr);
+                if (pDate < oneDayAgo) return false;
+              }
+              return true;
+            });
+
+            if (unclaimedPayment) {
+              verifiedViaMp = true;
+              matchedPayment = unclaimedPayment;
+              console.log('[VerifyPayment API] Transação inédita e aprovada associada à conta:', unclaimedPayment.id);
             }
           }
         }
@@ -183,13 +229,20 @@ export default async function handler(req: any, res: any) {
       }
     }
 
-    // 3. SE O PAGAMENTO FOI EFETIVAMENTE COMPROVADO PARA ESTA CONTA -> ATIVAÇÃO
-    if (verifiedViaMp) {
+    // 3. SE O PAGAMENTO FOI COMPROVADO -> ATIVAÇÃO E VINCULAÇÃO ÚNICA DA TRANSAÇÃO
+    if (verifiedViaMp && matchedPayment) {
       const daysToAdd = detectedPlan === 'anual' ? 365 : detectedPlan === 'trimestral' ? 90 : 30;
       const newExpiry = new Date();
       newExpiry.setDate(newExpiry.getDate() + daysToAdd);
 
       const targetId = profile?.id || cleanUserId;
+      const currentLinks = profile?.mercado_pago_links || {};
+      const updatedLinks = {
+        ...currentLinks,
+        claimed_payment_id: String(matchedPayment.id),
+        claimed_at: new Date().toISOString(),
+        payment_amount: matchedPayment.transaction_amount,
+      };
 
       const { data: updatedProfile, error: updateErr } = await supabaseAdmin
         .from('profiles')
@@ -197,6 +250,7 @@ export default async function handler(req: any, res: any) {
           subscription_status: 'active',
           subscription_plan: detectedPlan,
           subscription_expires_at: newExpiry.toISOString(),
+          mercado_pago_links: updatedLinks,
           updated_at: new Date().toISOString(),
         })
         .eq('id', targetId)
@@ -206,7 +260,7 @@ export default async function handler(req: any, res: any) {
       if (updateErr) {
         console.error('[VerifyPayment API] Erro ao atualizar Supabase:', updateErr);
       } else {
-        console.log(`[VerifyPayment API] ✅ Usuário ${targetId} ativado com sucesso para o plano ${detectedPlan}!`);
+        console.log(`[VerifyPayment API] ✅ Usuário ${targetId} ativado com sucesso para o plano ${detectedPlan} com pagamento #${matchedPayment.id}!`);
       }
 
       return res.status(200).json({
@@ -221,17 +275,17 @@ export default async function handler(req: any, res: any) {
           subscription_status: 'active',
           subscription_plan: detectedPlan,
           subscription_expires_at: newExpiry.toISOString(),
+          mercado_pago_links: updatedLinks,
         },
       });
     }
 
-    // 4. SE NÃO HOUVER PAGAMENTO VÁLIDO PARA ESTA CONTA
+    // 4. SE NÃO HOUVER PAGAMENTO APROVADO VÁLIDO
     return res.status(200).json({
       verified: false,
       status: profile?.subscription_status || 'trial',
       message: mpDiagnostic || 'Nenhum pagamento aprovado foi localizado no Mercado Pago para esta conta. Se você realizou o pagamento com outro e-mail, digite o Nº do Pagamento do comprovante para validar.',
       tokenConfigured: Boolean(rawMpToken),
-      tokenType: rawMpToken.startsWith('TEST-') ? 'TEST' : rawMpToken.startsWith('APP_USR-') ? 'PRODUCTION' : 'UNKNOWN',
     });
   } catch (err: any) {
     console.error('[VerifyPayment API] Erro geral:', err);

@@ -327,27 +327,6 @@ export default function App() {
                   }
                 : null
             );
-
-            // Verificação automática transparente em segundo plano com Mercado Pago
-            if (remoteProfile.subscriptionStatus === 'trial' && !remoteProfile.isAdmin && currentUser.id) {
-              fetch(`/api/subscription/verify-payment?_t=${Date.now()}`, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ userId: currentUser.id, email: currentUser.email }),
-              })
-                .then((r) => (r.ok ? r.json() : null))
-                .then((verifyData) => {
-                  if (verifyData && verifyData.verified) {
-                    setProfile((prev) => ({
-                      ...prev,
-                      subscriptionStatus: 'active',
-                      subscriptionPlan: verifyData.plan || 'trimestral',
-                      subscriptionExpiresAt: verifyData.expiresAt,
-                    }));
-                  }
-                })
-                .catch(() => {});
-            }
           }
 
           // Pedidos
@@ -565,6 +544,7 @@ export default function App() {
     localStorage.setItem(`atelie_orders_${newUser.id}`, JSON.stringify([]));
     localStorage.setItem(`atelie_catalog_${newUser.id}`, JSON.stringify([]));
 
+    const trialEndsAt = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString();
     const initialProfile: AtelieProfile = {
       name: newUser.atelieName || 'Meu Ateliê',
       ownerName: newUser.name || 'Artesã',
@@ -577,8 +557,14 @@ export default function App() {
       address: '',
       logoUrl: newUser.logoUrl || newUser.avatarUrl || '',
       avatarUrl: newUser.avatarUrl || newUser.logoUrl || '',
+      isAdmin: false,
+      subscriptionStatus: 'trial',
+      subscriptionPlan: 'free_trial',
+      trialEndsAt: trialEndsAt,
+      subscriptionExpiresAt: undefined,
     };
     localStorage.setItem(`atelie_profile_${newUser.id}`, JSON.stringify(initialProfile));
+    setProfile(initialProfile);
 
     setRegisteredUsers((prev) => [...prev, newUser]);
     setCurrentUser(newUser);

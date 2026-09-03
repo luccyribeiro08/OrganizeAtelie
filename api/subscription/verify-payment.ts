@@ -1,5 +1,5 @@
 // ============================================================
-// 🎀 ORGANIZE ATELIÊ - VERCEL SERVERLESS API: VERIFICAÇÃO E DIAGNÓSTICO DO MERCADO PAGO
+// 🎀 ORGANIZE ATELIÊ - VERCEL SERVERLESS API: VERIFICAÇÃO RIGOROSA E ISOLADA DE PAGAMENTO
 // Endpoint: POST /api/subscription/verify-payment
 // ============================================================
 
@@ -81,7 +81,7 @@ export default async function handler(req: any, res: any) {
       });
     }
 
-    // Se a assinatura já foi ativada pelo Webhook e está dentro do prazo
+    // Se a assinatura já foi ativada previamente para este usuário específico e está no prazo
     if (profile && profile.subscription_status === 'active' && profile.subscription_plan !== 'free_trial') {
       const now = new Date();
       const expiresAt = profile.subscription_expires_at ? new Date(profile.subscription_expires_at) : null;
@@ -91,13 +91,13 @@ export default async function handler(req: any, res: any) {
           status: 'active',
           plan: profile.subscription_plan || plan || 'mensal',
           expiresAt: profile.subscription_expires_at,
-          message: '🎉 Assinatura ativa confirmada!',
+          message: '🎉 Assinatura ativa confirmada para sua conta!',
           profile,
         });
       }
     }
 
-    // 2. CONSULTA NA API DO MERCADO PAGO
+    // 2. CONSULTA RIGOROSA NA API DO MERCADO PAGO (Apenas transações pertencentes a este usuário)
     let verifiedViaMp = false;
     let detectedPlan = plan || 'mensal';
     let matchedPayment: any = null;
@@ -107,7 +107,7 @@ export default async function handler(req: any, res: any) {
       mpDiagnostic = 'Token do Mercado Pago não configurado na Vercel.';
     } else {
       try {
-        // A) Se tiver ID específico do pagamento informado pelo comprovante
+        // A) Se tiver ID específico do comprovante informado pelo cliente
         if (paymentId) {
           const cleanPid = String(paymentId).replace(/\D/g, '').trim();
           if (cleanPid) {
@@ -120,7 +120,7 @@ export default async function handler(req: any, res: any) {
                 verifiedViaMp = true;
                 matchedPayment = pData;
               } else {
-                mpDiagnostic = `Pagamento #${cleanPid} encontrado no Mercado Pago, mas status é '${pData.status}'.`;
+                mpDiagnostic = `Pagamento #${cleanPid} encontrado no Mercado Pago, mas o status é '${pData.status}'.`;
               }
             } else {
               mpDiagnostic = `Pagamento #${cleanPid} não localizado no Mercado Pago (HTTP ${pRes.status}).`;
@@ -128,7 +128,7 @@ export default async function handler(req: any, res: any) {
           }
         }
 
-        // B) Busca por e-mail do pagador
+        // B) Busca estrita por e-mail do pagador
         if (!verifiedViaMp && cleanEmail) {
           const searchUrl = `https://api.mercadopago.com/v1/payments/search?sort=date_created&criteria=desc&limit=15&payer.email=${encodeURIComponent(cleanEmail)}`;
           const mpRes = await fetch(searchUrl, {
@@ -147,7 +147,7 @@ export default async function handler(req: any, res: any) {
           }
         }
 
-        // C) Busca por external_reference (ID do usuário)
+        // C) Busca estrita por external_reference (ID do usuário)
         if (!verifiedViaMp && cleanUserId) {
           const searchUrl = `https://api.mercadopago.com/v1/payments/search?sort=date_created&criteria=desc&limit=15&external_reference=${encodeURIComponent(cleanUserId)}`;
           const mpRes = await fetch(searchUrl, {
@@ -161,35 +161,6 @@ export default async function handler(req: any, res: any) {
               verifiedViaMp = true;
               matchedPayment = approved;
             }
-          }
-        }
-
-        // D) Busca ampla: Últimos pagamentos aprovados recebidos na conta da vendedora
-        if (!verifiedViaMp) {
-          const recentUrl = `https://api.mercadopago.com/v1/payments/search?sort=date_created&criteria=desc&limit=30`;
-          const recentRes = await fetch(recentUrl, {
-            headers: { Authorization: `Bearer ${rawMpToken}` },
-          });
-          if (recentRes.ok) {
-            const recentData = await recentRes.json();
-            const results = recentData.results || [];
-            
-            // Procura pagamentos aprovados recentes
-            const recentApproved = results.find((p: any) => {
-              return (p.status === 'approved' || p.status === 'authorized') && Number(p.transaction_amount || 0) >= 5;
-            });
-
-            if (recentApproved) {
-              verifiedViaMp = true;
-              matchedPayment = recentApproved;
-              console.log('[VerifyPayment API] Pagamento recente aprovado localizado na conta:', recentApproved.id, recentApproved.transaction_amount);
-            } else if (results.length > 0) {
-              mpDiagnostic = `Encontradas ${results.length} transações recentes no Mercado Pago, mas nenhuma com status 'approved'.`;
-            } else {
-              mpDiagnostic = 'Nenhuma transação localizada nesta conta do Mercado Pago.';
-            }
-          } else if (recentRes.status === 401) {
-            mpDiagnostic = 'Chave MERCADO_PAGO_ACCESS_TOKEN inválida ou de conta diferente na Vercel.';
           }
         }
 
@@ -212,7 +183,7 @@ export default async function handler(req: any, res: any) {
       }
     }
 
-    // 3. SE O PAGAMENTO FOI COMPROVADO -> ATIVAÇÃO IMEDIATA NO SUPABASE
+    // 3. SE O PAGAMENTO FOI EFETIVAMENTE COMPROVADO PARA ESTA CONTA -> ATIVAÇÃO
     if (verifiedViaMp) {
       const daysToAdd = detectedPlan === 'anual' ? 365 : detectedPlan === 'trimestral' ? 90 : 30;
       const newExpiry = new Date();
@@ -254,11 +225,11 @@ export default async function handler(req: any, res: any) {
       });
     }
 
-    // 4. SE NÃO FOI LOCALIZADO NENHUM PAGAMENTO APROVADO RECENTE
+    // 4. SE NÃO HOUVER PAGAMENTO VÁLIDO PARA ESTA CONTA
     return res.status(200).json({
       verified: false,
       status: profile?.subscription_status || 'trial',
-      message: mpDiagnostic || 'Ainda não identificamos nenhum pagamento aprovado no Mercado Pago para esta conta. Se você acabou de pagar, digite o Nº do Pagamento do comprovante ou aguarde alguns instantes.',
+      message: mpDiagnostic || 'Nenhum pagamento aprovado foi localizado no Mercado Pago para esta conta. Se você realizou o pagamento com outro e-mail, digite o Nº do Pagamento do comprovante para validar.',
       tokenConfigured: Boolean(rawMpToken),
       tokenType: rawMpToken.startsWith('TEST-') ? 'TEST' : rawMpToken.startsWith('APP_USR-') ? 'PRODUCTION' : 'UNKNOWN',
     });

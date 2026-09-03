@@ -310,60 +310,97 @@ export default function App() {
       setQuotations(loadUserQuotations(currentUser));
       setClients(loadUserClients(currentUser));
 
-      // Asynchronously fetch and sync with Supabase for real accounts
-      if (currentUser.id !== 'user-luccy-default') {
-        supabaseService.getProfile(currentUser.id).then((remoteProfile) => {
-          if (remoteProfile) setProfile(remoteProfile);
-        });
-        supabaseService.getOrders(currentUser.id).then((remoteOrders) => {
+      // Função unificada para sincronizar dados em tempo real com o Supabase
+      const syncWithSupabase = async () => {
+        if (!currentUser || currentUser.id === 'user-luccy-default') return;
+
+        try {
+          // Perfil e Links Globais
+          const remoteProfile = await supabaseService.getProfile(currentUser.id);
+          if (remoteProfile) {
+            setProfile((prev) => ({ ...prev, ...remoteProfile }));
+          }
+
+          // Pedidos
+          const remoteOrders = await supabaseService.getOrders(currentUser.id);
           if (remoteOrders && remoteOrders.length > 0) {
             setOrders(remoteOrders);
             try {
               localStorage.setItem(`atelie_orders_${currentUser.id}`, JSON.stringify(remoteOrders));
             } catch (e) {}
           }
-        });
-        supabaseService.getCatalog(currentUser.id).then((remoteCatalog) => {
+
+          // Catálogo
+          const remoteCatalog = await supabaseService.getCatalog(currentUser.id);
           if (remoteCatalog && remoteCatalog.length > 0) {
             setCatalog(remoteCatalog);
             try {
               localStorage.setItem(`atelie_catalog_${currentUser.id}`, JSON.stringify(remoteCatalog));
             } catch (e) {}
           }
-        });
-        supabaseService.getCatalogCategories(currentUser.id).then((remoteCats) => {
+
+          // Categorias
+          const remoteCats = await supabaseService.getCatalogCategories(currentUser.id);
           if (remoteCats && remoteCats.length > 0) {
             setCatalogCategories(remoteCats);
             try {
               localStorage.setItem(`atelie_categories_${currentUser.id}`, JSON.stringify(remoteCats));
             } catch (e) {}
           }
-        });
-        supabaseService.getOrderTypes(currentUser.id).then((remoteTypes) => {
+
+          // Tipos de Pedido
+          const remoteTypes = await supabaseService.getOrderTypes(currentUser.id);
           if (remoteTypes && remoteTypes.length > 0) {
             setOrderTypes(remoteTypes);
             try {
               localStorage.setItem(`atelie_order_types_${currentUser.id}`, JSON.stringify(remoteTypes));
             } catch (e) {}
           }
-        });
-        supabaseService.getQuotations(currentUser.id).then((remoteQuotes) => {
+
+          // Orçamentos
+          const remoteQuotes = await supabaseService.getQuotations(currentUser.id);
           if (remoteQuotes && remoteQuotes.length > 0) {
             setQuotations(remoteQuotes);
             try {
               localStorage.setItem(`atelie_quotations_${currentUser.id}`, JSON.stringify(remoteQuotes));
             } catch (e) {}
           }
-        });
-        supabaseService.getClients(currentUser.id).then((remoteClients) => {
+
+          // Clientes
+          const remoteClients = await supabaseService.getClients(currentUser.id);
           if (remoteClients && remoteClients.length > 0) {
             setClients(remoteClients);
             try {
               localStorage.setItem(`atelie_clients_${currentUser.id}`, JSON.stringify(remoteClients));
             } catch (e) {}
           }
-        });
-      }
+        } catch (syncErr) {
+          console.warn('[Sync] Erro na sincronização com Supabase:', syncErr);
+        }
+      };
+
+      syncWithSupabase();
+
+      // Sincronização automática para Smartphones, Tablets e iPads quando a tela acende ou o app ganha foco
+      const handleSyncEvent = () => {
+        if (document.visibilityState === 'visible') {
+          syncWithSupabase();
+        }
+      };
+
+      window.addEventListener('focus', handleSyncEvent);
+      window.addEventListener('online', handleSyncEvent);
+      document.addEventListener('visibilitychange', handleSyncEvent);
+
+      // Polling leve a cada 30 segundos para manter todos os dispositivos sempre atualizados
+      const intervalId = setInterval(syncWithSupabase, 30000);
+
+      return () => {
+        window.removeEventListener('focus', handleSyncEvent);
+        window.removeEventListener('online', handleSyncEvent);
+        document.removeEventListener('visibilitychange', handleSyncEvent);
+        clearInterval(intervalId);
+      };
     }
   }, [currentUser?.id]);
 

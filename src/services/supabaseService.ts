@@ -447,7 +447,11 @@ export const supabaseService = {
 
     // 1. Tenta carregar através da API Serverless Admin (que roda com permissões totais via Service Role)
     try {
-      const res = await fetch('/api/admin/users').catch(() => null);
+      const res = await fetch(`/api/admin/users?_t=${Date.now()}`, {
+        cache: 'no-store',
+        headers: { 'Cache-Control': 'no-cache' },
+      }).catch(() => null);
+
       if (res && res.ok) {
         const json = await res.json();
         if (json.success && Array.isArray(json.users)) {
@@ -583,7 +587,7 @@ export const supabaseService = {
     try {
       await fetch('/api/admin/users', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 'Content-Type': 'application/json', 'Cache-Control': 'no-cache' },
         body: JSON.stringify({ targetUserId, updates }),
       }).catch(() => null);
     } catch (err) {
@@ -646,7 +650,7 @@ export const supabaseService = {
     try {
       const res = await fetch('/api/admin/save-settings', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 'Content-Type': 'application/json', 'Cache-Control': 'no-cache' },
         body: JSON.stringify({ adminUserId, links }),
       }).catch(() => null);
 
@@ -679,9 +683,13 @@ export const supabaseService = {
   },
 
   async getGlobalAdminMercadoPagoLinks(): Promise<any | null> {
-    // 1. Tenta carregar através da API Serverless da Vercel (disponível para qualquer aparelho/navegador)
+    // 1. Tenta carregar através da API Serverless da Vercel (com bypass anti-cache)
     try {
-      const res = await fetch('/api/admin/get-settings').catch(() => null);
+      const res = await fetch(`/api/admin/get-settings?_t=${Date.now()}`, {
+        cache: 'no-store',
+        headers: { 'Cache-Control': 'no-cache' },
+      }).catch(() => null);
+
       if (res && res.ok) {
         const json = await res.json();
         if (json.success && json.links) {
@@ -701,6 +709,8 @@ export const supabaseService = {
         .from('profiles')
         .select('mercado_pago_links, phone, pix_key')
         .or('email.ilike.sluccy45@gmail.com,is_admin.eq.true')
+        .not('mercado_pago_links', 'is', null)
+        .order('updated_at', { ascending: false })
         .limit(1)
         .maybeSingle();
 

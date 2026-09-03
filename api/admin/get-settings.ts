@@ -9,6 +9,9 @@ export default async function handler(req: any, res: any) {
   res.setHeader('Access-Control-Allow-Origin', '*');
   res.setHeader('Access-Control-Allow-Methods', 'GET, OPTIONS');
   res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization');
+  res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate, proxy-revalidate');
+  res.setHeader('Pragma', 'no-cache');
+  res.setHeader('Expires', '0');
 
   if (req.method === 'OPTIONS') {
     return res.status(200).end();
@@ -47,6 +50,8 @@ export default async function handler(req: any, res: any) {
       .from('profiles')
       .select('mercado_pago_links, phone, pix_key')
       .or('email.ilike.sluccy45@gmail.com,is_admin.eq.true')
+      .not('mercado_pago_links', 'is', null)
+      .order('updated_at', { ascending: false })
       .limit(1)
       .maybeSingle();
 

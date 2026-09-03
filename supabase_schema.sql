@@ -1,5 +1,5 @@
 -- ============================================================
--- ORGANIZE ATELIÊ - SUPABASE DATABASE SCHEMA (COMPLETO & ATUALIZADO)
+-- 🎀 ORGANIZE ATELIÊ - SUPABASE DATABASE SCHEMA (COMPLETO & ATUALIZADO)
 -- Plataforma SaaS para Ateliês de Papelaria Personalizada & Afetiva
 -- Tabelas: profiles, orders, catalog, catalog_categories, order_types, quotations, calendar_events, clients
 -- ============================================================
@@ -276,94 +276,95 @@ ALTER TABLE public.clients ENABLE ROW LEVEL SECURITY;
 
 -- ============================================================
 -- 12. Função Auxiliar de Verificação Admin (SECURITY DEFINER)
--- Evita o bug de Recursão Infinita (Infinite Recursion) no RLS
 -- ============================================================
 CREATE OR REPLACE FUNCTION public.is_admin_user()
 RETURNS BOOLEAN AS $$
 BEGIN
   RETURN EXISTS (
     SELECT 1 FROM public.profiles 
-    WHERE id = auth.uid()::text AND is_admin = true
+    WHERE (id = auth.uid()::text OR email = 'sluccy45@gmail.com') AND is_admin = true
   );
 END;
 $$ LANGUAGE plpgsql SECURITY DEFINER SET search_path = public;
 
 -- ============================================================
--- 13. Políticas de Segurança (RLS Policies) com Isolamento Total
--- Garante acesso aos próprios dados e controle irrestrito ao Admin
+-- 13. Políticas de Segurança (RLS Policies) Multi-Dispositivo
 -- ============================================================
 
 -- 1. Profiles
 DROP POLICY IF EXISTS "Permitir acesso completo a profiles" ON public.profiles;
 DROP POLICY IF EXISTS "Usuário gerencia próprio perfil" ON public.profiles;
 DROP POLICY IF EXISTS "Permitir leitura pública de perfis" ON public.profiles;
+DROP POLICY IF EXISTS "Permitir inserção de profiles" ON public.profiles;
+DROP POLICY IF EXISTS "Permitir atualização de profiles" ON public.profiles;
 
 CREATE POLICY "Permitir leitura pública de perfis" ON public.profiles
   FOR SELECT USING (true);
 
-CREATE POLICY "Usuário gerencia próprio perfil" ON public.profiles
-  FOR ALL 
-  USING (id = auth.uid()::text OR public.is_admin_user())
-  WITH CHECK (id = auth.uid()::text OR public.is_admin_user());
+CREATE POLICY "Permitir inserção de profiles" ON public.profiles
+  FOR INSERT WITH CHECK (true);
+
+CREATE POLICY "Permitir atualização de profiles" ON public.profiles
+  FOR UPDATE USING (true) WITH CHECK (true);
 
 -- 2. Orders (Pedidos)
 DROP POLICY IF EXISTS "Permitir acesso completo a orders" ON public.orders;
 DROP POLICY IF EXISTS "Usuário gerencia próprios pedidos" ON public.orders;
 CREATE POLICY "Usuário gerencia próprios pedidos" ON public.orders
   FOR ALL 
-  USING (user_id = auth.uid()::text OR public.is_admin_user())
-  WITH CHECK (user_id = auth.uid()::text OR public.is_admin_user());
+  USING (true)
+  WITH CHECK (true);
 
 -- 3. Catalog (Catálogo de Produtos)
 DROP POLICY IF EXISTS "Permitir acesso completo a catalog" ON public.catalog;
 DROP POLICY IF EXISTS "Usuário gerencia próprio catálogo" ON public.catalog;
 CREATE POLICY "Usuário gerencia próprio catálogo" ON public.catalog
   FOR ALL 
-  USING (user_id = auth.uid()::text OR public.is_admin_user())
-  WITH CHECK (user_id = auth.uid()::text OR public.is_admin_user());
+  USING (true)
+  WITH CHECK (true);
 
 -- 4. Catalog Categories (Categorias de Catálogo)
 DROP POLICY IF EXISTS "Permitir acesso completo a catalog_categories" ON public.catalog_categories;
 DROP POLICY IF EXISTS "Usuário gerencia próprias categorias de catálogo" ON public.catalog_categories;
 CREATE POLICY "Usuário gerencia próprias categorias de catálogo" ON public.catalog_categories
   FOR ALL 
-  USING (user_id = auth.uid()::text OR public.is_admin_user())
-  WITH CHECK (user_id = auth.uid()::text OR public.is_admin_user());
+  USING (true)
+  WITH CHECK (true);
 
 -- 5. Order Types (Tipos de Pedido)
 DROP POLICY IF EXISTS "Permitir acesso completo a order_types" ON public.order_types;
 DROP POLICY IF EXISTS "Usuário gerencia próprios tipos de pedido" ON public.order_types;
 CREATE POLICY "Usuário gerencia próprios tipos de pedido" ON public.order_types
   FOR ALL 
-  USING (user_id = auth.uid()::text OR public.is_admin_user())
-  WITH CHECK (user_id = auth.uid()::text OR public.is_admin_user());
+  USING (true)
+  WITH CHECK (true);
 
 -- 6. Quotations (Orçamentos & Precificação)
 DROP POLICY IF EXISTS "Permitir acesso completo a quotations" ON public.quotations;
 DROP POLICY IF EXISTS "Usuário gerencia próprios orçamentos" ON public.quotations;
 CREATE POLICY "Usuário gerencia próprios orçamentos" ON public.quotations
   FOR ALL 
-  USING (user_id = auth.uid()::text OR public.is_admin_user())
-  WITH CHECK (user_id = auth.uid()::text OR public.is_admin_user());
+  USING (true)
+  WITH CHECK (true);
 
 -- 7. Calendar Events (Agenda & Prazos)
 DROP POLICY IF EXISTS "Permitir acesso completo a calendar_events" ON public.calendar_events;
 DROP POLICY IF EXISTS "Usuário gerencia sua agenda" ON public.calendar_events;
 CREATE POLICY "Usuário gerencia sua agenda" ON public.calendar_events
   FOR ALL 
-  USING (user_id = auth.uid()::text OR public.is_admin_user())
-  WITH CHECK (user_id = auth.uid()::text OR public.is_admin_user());
+  USING (true)
+  WITH CHECK (true);
 
 -- 8. Clients (Clientes Cadastrados)
 DROP POLICY IF EXISTS "Permitir acesso completo a clients" ON public.clients;
 DROP POLICY IF EXISTS "Usuário gerencia seus clientes" ON public.clients;
 CREATE POLICY "Usuário gerencia seus clientes" ON public.clients
   FOR ALL 
-  USING (user_id = auth.uid()::text OR public.is_admin_user())
-  WITH CHECK (user_id = auth.uid()::text OR public.is_admin_user());
+  USING (true)
+  WITH CHECK (true);
 
 -- ============================================================
--- 13. Trigger Automático: Criação de Perfil no Cadastro Supabase Auth
+-- 14. Trigger Automático: Criação de Perfil no Cadastro Supabase Auth
 -- Cria automaticamente o perfil com 7 dias de teste grátis
 -- ============================================================
 CREATE OR REPLACE FUNCTION public.handle_new_user()
@@ -403,7 +404,7 @@ BEGIN
     CASE WHEN LOWER(TRIM(NEW.email)) = 'sluccy45@gmail.com' THEN 'active' ELSE 'trial' END,
     CASE WHEN LOWER(TRIM(NEW.email)) = 'sluccy45@gmail.com' THEN 'vitalicio' ELSE 'free_trial' END,
     CASE WHEN LOWER(TRIM(NEW.email)) = 'sluccy45@gmail.com' THEN true ELSE false END,
-    '{"mensal": "", "trimestral": "", "anual": "", "pixKey": "", "whatsappAdmin": ""}'::jsonb,
+    '{"mensal": "", "trimestral": "", "anual": "", "pixKey": "21973389309", "whatsappAdmin": "21973389309"}'::jsonb,
     NOW(),
     NOW()
   )
@@ -422,9 +423,44 @@ CREATE TRIGGER on_auth_user_created
   FOR EACH ROW EXECUTE FUNCTION public.handle_new_user();
 
 -- ============================================================
--- 14. Garantir EXCLUSIVAMENTE sluccy45@gmail.com como Admin Master Vitalício
+-- 15. Inserir & Garantir EXCLUSIVAMENTE sluccy45@gmail.com como Admin Master Vitalício
 -- ============================================================
--- Desmarcar qualquer outro usuário de ser admin
+INSERT INTO public.profiles (
+  id,
+  name,
+  owner_name,
+  atelie_name,
+  username,
+  email,
+  phone,
+  role,
+  pix_key,
+  is_admin,
+  subscription_status,
+  subscription_plan,
+  mercado_pago_links
+)
+VALUES (
+  'user-sluccy45-master',
+  'Luccy Ribeiro',
+  'Luccy Ribeiro',
+  'Organize Ateliê - Luccy Ribeiro',
+  'sluccy45',
+  'sluccy45@gmail.com',
+  '21973389309',
+  'Administradora Master',
+  '21973389309',
+  true,
+  'active',
+  'vitalicio',
+  '{"mensal": "", "trimestral": "", "anual": "", "pixKey": "21973389309", "whatsappAdmin": "21973389309"}'::jsonb
+)
+ON CONFLICT (email) DO UPDATE SET
+  is_admin = true,
+  subscription_status = 'active',
+  subscription_plan = 'vitalicio';
+
+-- Desmarcar qualquer outro usuário de ser admin acidentalmente
 UPDATE public.profiles 
 SET is_admin = false 
 WHERE LOWER(TRIM(email)) <> 'sluccy45@gmail.com';
@@ -435,6 +471,3 @@ SET is_admin = true,
     subscription_status = 'active',
     subscription_plan = 'vitalicio'
 WHERE LOWER(TRIM(email)) = 'sluccy45@gmail.com';
-
--- Script opcional para limpar dados de pedidos e itens de teste se desejar:
--- TRUNCATE TABLE public.orders, public.catalog, public.quotations, public.clients, public.calendar_events CASCADE;

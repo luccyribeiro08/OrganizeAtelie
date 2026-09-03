@@ -41,23 +41,42 @@ export default async function handler(req: any, res: any) {
     const body = typeof req.body === 'string' ? JSON.parse(req.body) : req.body || {};
     const { links, adminUserId } = body;
 
+    // 1. Tenta atualizar todas as linhas de admin existentes
+    const { error: updateErr } = await supabaseAdmin
+      .from('profiles')
+      .update({
+        mercado_pago_links: links,
+        phone: links?.whatsappAdmin || '21973389309',
+        pix_key: links?.pixKey || '21973389309',
+        is_admin: true,
+        subscription_status: 'active',
+        subscription_plan: 'vitalicio',
+        updated_at: new Date().toISOString(),
+      })
+      .or('email.ilike.sluccy45@gmail.com,is_admin.eq.true');
+
+    // 2. Se nenhuma linha existia, insere usando upsert seguro
     const targetAdminId = adminUserId || 'user-sluccy45-master';
+    const { data, error } = await supabaseAdmin
+      .from('profiles')
+      .upsert({
+        id: targetAdminId,
+        email: 'sluccy45@gmail.com',
+        name: 'Luccy Ribeiro',
+        atelie_name: 'Organize Ateliê - Luccy Ribeiro',
+        username: 'sluccy45',
+        phone: links?.whatsappAdmin || '21973389309',
+        pix_key: links?.pixKey || '21973389309',
+        is_admin: true,
+        subscription_status: 'active',
+        subscription_plan: 'vitalicio',
+        mercado_pago_links: links,
+        updated_at: new Date().toISOString(),
+      }, { onConflict: 'id' })
+      .select()
+      .maybeSingle();
 
-    // Salva ou atualiza a linha do perfil da Administradora Master
-    const { data, error } = await supabaseAdmin.from('profiles').upsert({
-      id: targetAdminId,
-      email: 'sluccy45@gmail.com',
-      name: 'Luccy Ribeiro',
-      atelie_name: 'Organize Ateliê - Luccy Ribeiro',
-      username: 'sluccy45',
-      is_admin: true,
-      subscription_status: 'active',
-      subscription_plan: 'vitalicio',
-      mercado_pago_links: links,
-      updated_at: new Date().toISOString(),
-    }).select().maybeSingle();
-
-    if (error) {
+    if (error && updateErr) {
       console.error('[SaveSettings API] Erro ao salvar links no Supabase:', error);
       return res.status(500).json({ error: error.message });
     }

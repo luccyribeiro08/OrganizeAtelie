@@ -296,6 +296,11 @@ $$ LANGUAGE plpgsql SECURITY DEFINER SET search_path = public;
 -- 1. Profiles
 DROP POLICY IF EXISTS "Permitir acesso completo a profiles" ON public.profiles;
 DROP POLICY IF EXISTS "Usuário gerencia próprio perfil" ON public.profiles;
+DROP POLICY IF EXISTS "Permitir leitura pública de perfis" ON public.profiles;
+
+CREATE POLICY "Permitir leitura pública de perfis" ON public.profiles
+  FOR SELECT USING (true);
+
 CREATE POLICY "Usuário gerencia próprio perfil" ON public.profiles
   FOR ALL 
   USING (id = auth.uid()::text OR public.is_admin_user())

@@ -445,46 +445,86 @@ export const supabaseService = {
   async getAllUsersForAdmin(): Promise<AtelieProfile[]> {
     const userMap = new Map<string, AtelieProfile>();
 
-    // 1. Tenta carregar do Supabase profiles
+    // 1. Tenta carregar através da API Serverless Admin (que roda com permissões totais via Service Role)
     try {
-      const { data, error } = await supabase
-        .from('profiles')
-        .select('*')
-        .order('created_at', { ascending: false });
-
-      if (!error && Array.isArray(data)) {
-        data.forEach((d: any) => {
-          if (d && d.id) {
-            userMap.set(d.id, {
-              id: d.id,
-              name: d.atelie_name || d.name,
-              ownerName: d.name,
-              role: d.role || 'Artesã Responsável',
-              slogan: d.slogan || '',
-              phone: d.phone || '',
-              pixKey: d.pix_key || '',
-              instagram: d.instagram || '',
-              username: d.username || '',
-              email: d.email || '',
-              address: d.address || '',
-              logoUrl: d.logo_url || '',
-              avatarUrl: d.avatar_url || '',
-              trialEndsAt: d.trial_ends_at,
-              subscriptionStatus: d.subscription_status || 'trial',
-              subscriptionPlan: d.subscription_plan || 'free_trial',
-              subscriptionExpiresAt: d.subscription_expires_at,
-              isAdmin: Boolean(d.is_admin) || d.email === 'sluccy45@gmail.com',
-              mercadoPagoLinks: d.mercado_pago_links || {},
-              createdAt: d.created_at || new Date().toISOString(),
-            });
-          }
-        });
+      const res = await fetch('/api/admin/users').catch(() => null);
+      if (res && res.ok) {
+        const json = await res.json();
+        if (json.success && Array.isArray(json.users)) {
+          json.users.forEach((d: any) => {
+            if (d && d.id) {
+              userMap.set(d.id, {
+                id: d.id,
+                name: d.atelie_name || d.name,
+                ownerName: d.name,
+                role: d.role || 'Artesã Responsável',
+                slogan: d.slogan || '',
+                phone: d.phone || '',
+                pixKey: d.pix_key || '',
+                instagram: d.instagram || '',
+                username: d.username || '',
+                email: d.email || '',
+                address: d.address || '',
+                logoUrl: d.logo_url || '',
+                avatarUrl: d.avatar_url || '',
+                trialEndsAt: d.trial_ends_at,
+                subscriptionStatus: d.subscription_status || 'trial',
+                subscriptionPlan: d.subscription_plan || 'free_trial',
+                subscriptionExpiresAt: d.subscription_expires_at,
+                isAdmin: Boolean(d.is_admin) || d.email === 'sluccy45@gmail.com',
+                mercadoPagoLinks: d.mercado_pago_links || {},
+                createdAt: d.created_at || new Date().toISOString(),
+              });
+            }
+          });
+        }
       }
-    } catch (e) {
-      console.warn('Erro ao buscar perfis no Supabase:', e);
+    } catch (apiErr) {
+      console.warn('Falha na API /api/admin/users, tentando Supabase direto:', apiErr);
     }
 
-    // 2. Mescla com usuários registrados localmente (localStorage atelie_users_db_v2)
+    // 2. Consulta direta no Supabase (fallback)
+    if (userMap.size === 0) {
+      try {
+        const { data, error } = await supabase
+          .from('profiles')
+          .select('*')
+          .order('created_at', { ascending: false });
+
+        if (!error && Array.isArray(data)) {
+          data.forEach((d: any) => {
+            if (d && d.id) {
+              userMap.set(d.id, {
+                id: d.id,
+                name: d.atelie_name || d.name,
+                ownerName: d.name,
+                role: d.role || 'Artesã Responsável',
+                slogan: d.slogan || '',
+                phone: d.phone || '',
+                pixKey: d.pix_key || '',
+                instagram: d.instagram || '',
+                username: d.username || '',
+                email: d.email || '',
+                address: d.address || '',
+                logoUrl: d.logo_url || '',
+                avatarUrl: d.avatar_url || '',
+                trialEndsAt: d.trial_ends_at,
+                subscriptionStatus: d.subscription_status || 'trial',
+                subscriptionPlan: d.subscription_plan || 'free_trial',
+                subscriptionExpiresAt: d.subscription_expires_at,
+                isAdmin: Boolean(d.is_admin) || d.email === 'sluccy45@gmail.com',
+                mercadoPagoLinks: d.mercado_pago_links || {},
+                createdAt: d.created_at || new Date().toISOString(),
+              });
+            }
+          });
+        }
+      } catch (e) {
+        console.warn('Erro ao buscar perfis no Supabase:', e);
+      }
+    }
+
+    // 3. Mescla com usuários registrados localmente (localStorage)
     try {
       const localStr = localStorage.getItem('atelie_users_db_v2');
       if (localStr) {
@@ -539,7 +579,18 @@ export const supabaseService = {
       isAdmin?: boolean;
     }
   ): Promise<boolean> {
-    // 1. Atualiza no Supabase
+    // 1. Atualiza no Supabase via API Serverless Admin (Service Role)
+    try {
+      await fetch('/api/admin/users', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ targetUserId, updates }),
+      }).catch(() => null);
+    } catch (err) {
+      console.warn('Erro ao atualizar via API admin users:', err);
+    }
+
+    // 2. Atualiza no Supabase diretamente (fallback)
     try {
       await supabase
         .from('profiles')
@@ -556,7 +607,7 @@ export const supabaseService = {
       console.error('Error updating user subscription in Supabase', e);
     }
 
-    // 2. Atualiza na lista local de usuários (localStorage atelie_users_db_v2)
+    // 3. Atualiza na lista local de usuários (localStorage atelie_users_db_v2)
     try {
       const localStr = localStorage.getItem('atelie_users_db_v2');
       if (localStr) {
@@ -586,12 +637,27 @@ export const supabaseService = {
   },
 
   async saveAdminMercadoPagoLinks(adminUserId: string, links: any): Promise<boolean> {
-    // 1. Salva no localStorage para atualização instantânea em todas as telas
+    // 1. Salva no localStorage para feedback instantâneo
     try {
       localStorage.setItem('atelie_global_mp_links_v1', JSON.stringify(links));
     } catch {}
 
-    // 2. Salva no Supabase profiles usando upsert para a Administradora Master
+    // 2. Salva no Supabase via API Serverless Admin (Service Role)
+    try {
+      const res = await fetch('/api/admin/save-settings', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ adminUserId, links }),
+      }).catch(() => null);
+
+      if (res && res.ok) {
+        return true;
+      }
+    } catch (apiErr) {
+      console.warn('Erro ao salvar via /api/admin/save-settings:', apiErr);
+    }
+
+    // 3. Salva no Supabase profiles usando upsert (fallback direto)
     try {
       await supabase.from('profiles').upsert({
         id: adminUserId || 'user-sluccy45-master',
@@ -608,12 +674,28 @@ export const supabaseService = {
       return true;
     } catch (e) {
       console.error('Error saving Mercado Pago links to Supabase', e);
-      return true; // Retorna true pois o cache local foi salvo com sucesso
+      return true;
     }
   },
 
   async getGlobalAdminMercadoPagoLinks(): Promise<any | null> {
-    // 1. Tenta carregar do Supabase
+    // 1. Tenta carregar através da API Serverless da Vercel (disponível para qualquer aparelho/navegador)
+    try {
+      const res = await fetch('/api/admin/get-settings').catch(() => null);
+      if (res && res.ok) {
+        const json = await res.json();
+        if (json.success && json.links) {
+          try {
+            localStorage.setItem('atelie_global_mp_links_v1', JSON.stringify(json.links));
+          } catch {}
+          return json.links;
+        }
+      }
+    } catch (err) {
+      console.warn('Erro ao buscar /api/admin/get-settings:', err);
+    }
+
+    // 2. Tenta carregar do Supabase diretamente (fallback)
     try {
       const { data, error } = await supabase
         .from('profiles')
@@ -639,7 +721,7 @@ export const supabaseService = {
       console.warn('Error fetching global admin MP links from Supabase', e);
     }
 
-    // 2. Fallback para localStorage
+    // 3. Fallback para localStorage
     try {
       const cached = localStorage.getItem('atelie_global_mp_links_v1');
       if (cached) {

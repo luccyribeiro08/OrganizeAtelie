@@ -1,5 +1,5 @@
 // ============================================================
-// 🎀 ORGANIZE ATELIÊ - VERCEL SERVERLESS API: ATIVAÇÃO E VERIFICAÇÃO DE PAGAMENTO
+// 🎀 ORGANIZE ATELIÊ - VERCEL SERVERLESS API: VERIFICAÇÃO REAL E SEGURA DE PAGAMENTO
 // Endpoint: POST /api/subscription/verify-payment
 // ============================================================
 
@@ -76,12 +76,30 @@ export default async function handler(req: any, res: any) {
       });
     }
 
-    // 2. CONSULTA NA API DO MERCADO PAGO (Se houver Token de Acesso configurado)
-    let detectedPlan = plan || 'trimestral';
-    let verifiedViaMp = false;
+    // Se o webhook do Mercado Pago já aprovou e a assinatura está ativa e no prazo
+    if (profile && profile.subscription_status === 'active') {
+      const now = new Date();
+      const expiresAt = profile.subscription_expires_at ? new Date(profile.subscription_expires_at) : null;
+      if (!expiresAt || now <= expiresAt) {
+        return res.status(200).json({
+          verified: true,
+          status: 'active',
+          plan: profile.subscription_plan || plan || 'mensal',
+          expiresAt: profile.subscription_expires_at,
+          message: '🎉 Assinatura ativa confirmada pelo Mercado Pago!',
+          profile,
+        });
+      }
+    }
 
-    if (mpAccessToken && (cleanEmail || cleanUserId || paymentId)) {
+    // 2. CONSULTA REAL NA API DO MERCADO PAGO
+    let verifiedViaMp = false;
+    let detectedPlan = plan || 'mensal';
+    let matchedPayment: any = null;
+
+    if (mpAccessToken) {
       try {
+        // A) Se tiver ID específico do pagamento (informado pelo cliente ou link)
         if (paymentId) {
           const pRes = await fetch(`https://api.mercadopago.com/v1/payments/${paymentId}`, {
             headers: { Authorization: `Bearer ${mpAccessToken}` },
@@ -90,13 +108,14 @@ export default async function handler(req: any, res: any) {
             const pData = await pRes.json();
             if (pData.status === 'approved' || pData.status === 'authorized') {
               verifiedViaMp = true;
-              detectedPlan = pData.metadata?.plan || detectedPlan;
+              matchedPayment = pData;
             }
           }
         }
 
+        // B) Busca pagamentos recentes associados ao e-mail do pagador
         if (!verifiedViaMp && cleanEmail) {
-          const searchUrl = `https://api.mercadopago.com/v1/payments/search?sort=date_created&criteria=desc&limit=5&payer.email=${encodeURIComponent(cleanEmail)}`;
+          const searchUrl = `https://api.mercadopago.com/v1/payments/search?sort=date_created&criteria=desc&limit=10&payer.email=${encodeURIComponent(cleanEmail)}`;
           const mpRes = await fetch(searchUrl, {
             headers: { Authorization: `Bearer ${mpAccessToken}` },
           });
@@ -106,23 +125,54 @@ export default async function handler(req: any, res: any) {
             const approved = results.find((p: any) => p.status === 'approved' || p.status === 'authorized');
             if (approved) {
               verifiedViaMp = true;
-              detectedPlan = approved.metadata?.plan || detectedPlan;
+              matchedPayment = approved;
             }
           }
         }
+
+        // C) Busca pagamentos recentes associados ao external_reference (ID do usuário)
+        if (!verifiedViaMp && cleanUserId) {
+          const searchUrl = `https://api.mercadopago.com/v1/payments/search?sort=date_created&criteria=desc&limit=10&external_reference=${encodeURIComponent(cleanUserId)}`;
+          const mpRes = await fetch(searchUrl, {
+            headers: { Authorization: `Bearer ${mpAccessToken}` },
+          });
+          if (mpRes.ok) {
+            const searchData = await mpRes.json();
+            const results = searchData.results || [];
+            const approved = results.find((p: any) => p.status === 'approved' || p.status === 'authorized');
+            if (approved) {
+              verifiedViaMp = true;
+              matchedPayment = approved;
+            }
+          }
+        }
+
+        // Determina o plano exato a partir do valor pago ou metadata
+        if (matchedPayment) {
+          const amount = matchedPayment.transaction_amount || 0;
+          if (amount >= 200) {
+            detectedPlan = 'anual';
+          } else if (amount >= 60) {
+            detectedPlan = 'trimestral';
+          } else if (amount >= 20) {
+            detectedPlan = 'mensal';
+          } else {
+            detectedPlan = matchedPayment.metadata?.plan || plan || 'mensal';
+          }
+        }
       } catch (mpErr) {
-        console.warn('[VerifyPayment API] Erro ao consultar Mercado Pago:', mpErr);
+        console.warn('[VerifyPayment API] Erro ao consultar API do Mercado Pago:', mpErr);
       }
     }
 
-    // 3. ATIVAÇÃO SEGURA DO PLANO NO SUPABASE COM SERVICE ROLE
-    const daysToAdd = detectedPlan === 'anual' ? 365 : detectedPlan === 'trimestral' ? 90 : 30;
-    const newExpiry = new Date();
-    newExpiry.setDate(newExpiry.getDate() + daysToAdd);
+    // 3. SE O PAGAMENTO FOI REALMENTE COMPROVADO NO MERCADO PAGO -> ATIVA O PLANO
+    if (verifiedViaMp) {
+      const daysToAdd = detectedPlan === 'anual' ? 365 : detectedPlan === 'trimestral' ? 90 : 30;
+      const newExpiry = new Date();
+      newExpiry.setDate(newExpiry.getDate() + daysToAdd);
 
-    const targetId = profile?.id || cleanUserId;
+      const targetId = profile?.id || cleanUserId;
 
-    if (targetId) {
       const { data: updatedProfile, error: updateErr } = await supabaseAdmin
         .from('profiles')
         .update({
@@ -135,30 +185,22 @@ export default async function handler(req: any, res: any) {
         .select('*')
         .maybeSingle();
 
-      if (updateErr) {
-        console.error('[VerifyPayment API] Erro ao atualizar Supabase:', updateErr);
-      } else {
-        console.log(`[VerifyPayment API] ✅ Usuário ${targetId} ativado com sucesso para o plano ${detectedPlan}!`);
-      }
-
       return res.status(200).json({
         verified: true,
         status: 'active',
         plan: detectedPlan,
         expiresAt: newExpiry.toISOString(),
-        message: '🎉 Pagamento confirmado e assinatura ativada com sucesso!',
-        profile: updatedProfile || {
-          ...profile,
-          subscription_status: 'active',
-          subscription_plan: detectedPlan,
-          subscription_expires_at: newExpiry.toISOString(),
-        },
+        paymentId: matchedPayment?.id,
+        message: '🎉 Pagamento aprovado no Mercado Pago! Sua assinatura foi ativada.',
+        profile: updatedProfile || profile,
       });
     }
 
-    return res.status(404).json({
+    // 4. SE NÃO HOUVER PAGAMENTO APROVADO NO MERCADO PAGO -> NÃO LIBERA
+    return res.status(200).json({
       verified: false,
-      error: 'Usuário não localizado para ativação.',
+      status: profile?.subscription_status || 'trial',
+      message: 'Ainda não identificamos nenhum pagamento aprovado no Mercado Pago para esta conta. Se você acabou de pagar, aguarde alguns instantes para a compensação ou envie o comprovante no WhatsApp.',
     });
   } catch (err: any) {
     console.error('[VerifyPayment API] Erro geral:', err);

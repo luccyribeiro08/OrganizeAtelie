@@ -232,13 +232,17 @@ export const SubscriptionModal: React.FC<SubscriptionModalProps> = ({
   };
 
   const [verificationMessage, setVerificationMessage] = useState<{ type: 'error' | 'info' | 'success'; text: string } | null>(null);
+  const [paymentIdInput, setPaymentIdInput] = useState('');
+  const [showIdInput, setShowIdInput] = useState(false);
 
-  const handleConfirmPayment = async () => {
+  const handleConfirmPayment = async (customPaymentId?: string) => {
     if (!profile?.id) return;
     setIsActivating(true);
     setVerificationMessage(null);
 
     try {
+      const pid = customPaymentId || (paymentIdInput ? paymentIdInput.trim() : undefined);
+
       // 1. Chama a API de verificação real de pagamento no Mercado Pago e Supabase
       const res = await fetch(`/api/subscription/verify-payment?_t=${Date.now()}`, {
         method: 'POST',
@@ -247,6 +251,7 @@ export const SubscriptionModal: React.FC<SubscriptionModalProps> = ({
           userId: profile.id,
           email: profile.email,
           plan: selectedPlan,
+          paymentId: pid,
         }),
       }).catch(() => null);
 
@@ -286,7 +291,7 @@ export const SubscriptionModal: React.FC<SubscriptionModalProps> = ({
           setActivationSuccess(true);
           setVerificationMessage({
             type: 'success',
-            text: '🎉 Pagamento confirmado no Mercado Pago! Sua assinatura foi ativada com sucesso.',
+            text: '🎉 Pagamento aprovado no Mercado Pago! Sua assinatura foi ativada com sucesso.',
           });
           setTimeout(() => {
             onClose();
@@ -295,29 +300,15 @@ export const SubscriptionModal: React.FC<SubscriptionModalProps> = ({
         } else {
           setVerificationMessage({
             type: 'error',
-            text: data.message || 'Pagamento ainda não confirmado pelo Mercado Pago. Se você acabou de pagar, aguarde alguns segundos e clique novamente.',
+            text: data.message || 'Nenhum pagamento aprovado foi localizado no Mercado Pago para esta conta.',
           });
           return;
         }
       }
 
-      // 2. Fallback: consulta direta no perfil do Supabase
-      const fresh = await supabaseService.getProfile(profile.id);
-      if (fresh && (fresh.subscriptionStatus === 'active' || fresh.subscriptionStatus === 'admin')) {
-        if (onProfileUpdated) onProfileUpdated(fresh);
-        triggerConfetti();
-        setActivationSuccess(true);
-        setVerificationMessage({
-          type: 'success',
-          text: '🎉 Assinatura ativa e verificada no banco de dados!',
-        });
-        setTimeout(() => onClose(), 1800);
-        return;
-      }
-
       setVerificationMessage({
         type: 'error',
-        text: 'Nenhum pagamento aprovado foi localizado no Mercado Pago para esta conta ainda. Por favor, conclua o pagamento pelo link acima ou envie o comprovante no WhatsApp.',
+        text: 'Nenhum pagamento aprovado foi localizado no Mercado Pago para esta conta ainda. Realize o pagamento ou envie o comprovante no WhatsApp.',
       });
     } catch (e) {
       console.error('Erro ao verificar pagamento:', e);
@@ -541,6 +532,37 @@ export const SubscriptionModal: React.FC<SubscriptionModalProps> = ({
               <span className="flex-1">{verificationMessage.text}</span>
             </div>
           )}
+
+          {/* Validação por Nº do Pagamento se o e-mail não bater */}
+          <div className="pt-2 border-t border-emerald-200/60 flex flex-col sm:flex-row items-center justify-between gap-2">
+            <button
+              type="button"
+              onClick={() => setShowIdInput(!showIdInput)}
+              className="text-[11px] text-emerald-800 hover:underline font-semibold cursor-pointer"
+            >
+              {showIdInput ? 'Ocultar busca por Nº do Comprovante' : 'Pagou com outro e-mail? Digite o Nº do Pagamento'}
+            </button>
+
+            {showIdInput && (
+              <div className="flex items-center gap-2 w-full sm:w-auto">
+                <input
+                  type="text"
+                  placeholder="Ex: 12345678901"
+                  value={paymentIdInput}
+                  onChange={(e) => setPaymentIdInput(e.target.value)}
+                  className="bg-white border border-emerald-300 rounded-xl px-3 py-1.5 text-xs text-slate-800 w-full sm:w-44 focus:outline-hidden focus:ring-1 focus:ring-emerald-500"
+                />
+                <button
+                  type="button"
+                  onClick={() => handleConfirmPayment()}
+                  disabled={isActivating || !paymentIdInput.trim()}
+                  className="px-3 py-1.5 rounded-xl bg-emerald-700 hover:bg-emerald-800 text-white font-bold text-xs disabled:opacity-50 cursor-pointer whitespace-nowrap"
+                >
+                  Validar ID
+                </button>
+              </div>
+            )}
+          </div>
         </div>
 
         {/* Payment Methods & PIX Box */}

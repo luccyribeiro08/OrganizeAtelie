@@ -231,72 +231,100 @@ export const SubscriptionModal: React.FC<SubscriptionModalProps> = ({
     }
   };
 
+  const [verificationMessage, setVerificationMessage] = useState<{ type: 'error' | 'info' | 'success'; text: string } | null>(null);
+
   const handleConfirmPayment = async () => {
     if (!profile?.id) return;
     setIsActivating(true);
-    try {
-      const daysToAdd = selectedPlan === 'anual' ? 365 : selectedPlan === 'trimestral' ? 90 : 30;
-      const newExpiry = new Date();
-      newExpiry.setDate(newExpiry.getDate() + daysToAdd);
+    setVerificationMessage(null);
 
-      // 1. Aciona o Webhook de pagamento para registrar e ativar
-      await fetch('/api/webhooks/payment', {
+    try {
+      // 1. Chama a API de verificação real de pagamento no Mercado Pago e Supabase
+      const res = await fetch(`/api/subscription/verify-payment?_t=${Date.now()}`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 'Content-Type': 'application/json', 'Cache-Control': 'no-cache' },
         body: JSON.stringify({
-          event: 'payment.approved',
-          data: {
-            id: `pay-${Date.now()}`,
-            status: 'approved',
-            user_id: profile.id,
-            user_email: profile.email,
-            plan: selectedPlan,
-          },
+          userId: profile.id,
+          email: profile.email,
+          plan: selectedPlan,
         }),
       }).catch(() => null);
 
-      // 2. Atualiza via supabaseService
-      await supabaseService.updateUserSubscriptionAdmin(profile.id, {
-        subscriptionStatus: 'active',
-        subscriptionPlan: selectedPlan,
-        subscriptionExpiresAt: newExpiry.toISOString(),
-      });
+      if (res && res.ok) {
+        const data = await res.json();
+        if (data.verified) {
+          const freshPlan = data.plan || selectedPlan;
+          const updatedProfile: AtelieProfile = {
+            ...profile,
+            subscriptionStatus: 'active',
+            subscriptionPlan: freshPlan,
+            subscriptionExpiresAt: data.expiresAt || profile.subscriptionExpiresAt,
+          };
 
-      const updatedProfile: AtelieProfile = {
-        ...profile,
-        subscriptionStatus: 'active',
-        subscriptionPlan: selectedPlan,
-        subscriptionExpiresAt: newExpiry.toISOString(),
-      };
+          if (onProfileUpdated) {
+            onProfileUpdated(updatedProfile);
+          }
 
-      if (onProfileUpdated) {
-        onProfileUpdated(updatedProfile);
+          try {
+            localStorage.setItem(`atelie_profile_${profile.id}`, JSON.stringify(updatedProfile));
+            const currentStored = localStorage.getItem('atelie_current_user_v3');
+            if (currentStored) {
+              const parsed = JSON.parse(currentStored);
+              localStorage.setItem(
+                'atelie_current_user_v3',
+                JSON.stringify({
+                  ...parsed,
+                  subscriptionStatus: 'active',
+                  subscriptionPlan: freshPlan,
+                  subscriptionExpiresAt: data.expiresAt || profile.subscriptionExpiresAt,
+                })
+              );
+            }
+          } catch {}
+
+          triggerConfetti();
+          setActivationSuccess(true);
+          setVerificationMessage({
+            type: 'success',
+            text: '🎉 Pagamento confirmado no Mercado Pago! Sua assinatura foi ativada com sucesso.',
+          });
+          setTimeout(() => {
+            onClose();
+          }, 2000);
+          return;
+        } else {
+          setVerificationMessage({
+            type: 'error',
+            text: data.message || 'Pagamento ainda não confirmado pelo Mercado Pago. Se você acabou de pagar, aguarde alguns segundos e clique novamente.',
+          });
+          return;
+        }
       }
 
-      try {
-        localStorage.setItem(`atelie_profile_${profile.id}`, JSON.stringify(updatedProfile));
-        const currentStored = localStorage.getItem('atelie_current_user_v3');
-        if (currentStored) {
-          const parsed = JSON.parse(currentStored);
-          localStorage.setItem(
-            'atelie_current_user_v3',
-            JSON.stringify({
-              ...parsed,
-              subscriptionStatus: 'active',
-              subscriptionPlan: selectedPlan,
-              subscriptionExpiresAt: newExpiry.toISOString(),
-            })
-          );
-        }
-      } catch {}
+      // 2. Fallback: consulta direta no perfil do Supabase
+      const fresh = await supabaseService.getProfile(profile.id);
+      if (fresh && (fresh.subscriptionStatus === 'active' || fresh.subscriptionStatus === 'admin')) {
+        if (onProfileUpdated) onProfileUpdated(fresh);
+        triggerConfetti();
+        setActivationSuccess(true);
+        setVerificationMessage({
+          type: 'success',
+          text: '🎉 Assinatura ativa e verificada no banco de dados!',
+        });
+        setTimeout(() => onClose(), 1800);
+        return;
+      }
 
-      triggerConfetti();
-      setActivationSuccess(true);
-      setTimeout(() => {
-        onClose();
-      }, 1800);
+      setVerificationMessage({
+        type: 'error',
+        text: 'Nenhum pagamento aprovado foi localizado no Mercado Pago para esta conta ainda. Por favor, conclua o pagamento pelo link acima ou envie o comprovante no WhatsApp.',
+      });
     } catch (e) {
-      console.error('Erro ao ativar assinatura:', e);
+      console.error('Erro ao verificar pagamento:', e);
+      setVerificationMessage({
+        type: 'error',
+        text: 'Erro ao consultar o gateway de pagamento. Tente novamente em instantes.',
+      });
     } finally {
       setIsActivating(false);
     }
@@ -458,41 +486,61 @@ export const SubscriptionModal: React.FC<SubscriptionModalProps> = ({
           })}
         </div>
 
-        {/* Action: Já Paguei / Ativar Instantaneamente */}
-        <div className="p-4 sm:p-5 bg-gradient-to-r from-emerald-50 via-teal-50 to-emerald-50 rounded-2xl border-2 border-emerald-300 shadow-sm flex flex-col sm:flex-row items-center justify-between gap-4">
-          <div className="space-y-1 text-center sm:text-left">
-            <span className="inline-flex items-center gap-1 text-xs font-bold text-emerald-900">
-              <Sparkles className="w-4 h-4 text-emerald-600" />
-              Já efetuou o pagamento no Mercado Pago ou PIX?
-            </span>
-            <p className="text-[11px] sm:text-xs text-emerald-700 leading-relaxed">
-              Clique abaixo para validar o pagamento e liberar o acesso completo do seu ateliê imediatamente.
-            </p>
+        {/* Action: Já Paguei / Verificar no Mercado Pago */}
+        <div className="p-4 sm:p-5 bg-gradient-to-r from-emerald-50 via-teal-50 to-emerald-50 rounded-2xl border-2 border-emerald-300 shadow-sm space-y-3">
+          <div className="flex flex-col sm:flex-row items-center justify-between gap-4">
+            <div className="space-y-1 text-center sm:text-left">
+              <span className="inline-flex items-center gap-1 text-xs font-bold text-emerald-900">
+                <Sparkles className="w-4 h-4 text-emerald-600" />
+                Já efetuou o pagamento no Mercado Pago ou PIX?
+              </span>
+              <p className="text-[11px] sm:text-xs text-emerald-700 leading-relaxed">
+                Clique ao lado para verificar a aprovação no Mercado Pago e liberar o seu acesso.
+              </p>
+            </div>
+
+            <button
+              type="button"
+              onClick={handleConfirmPayment}
+              disabled={isActivating || activationSuccess}
+              className="w-full sm:w-auto px-6 py-3 rounded-2xl bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-700 hover:to-teal-700 text-white font-extrabold text-xs sm:text-sm flex items-center justify-center gap-2 shadow-lg shadow-emerald-200 transition-all active:scale-95 cursor-pointer flex-shrink-0 disabled:opacity-50"
+            >
+              {isActivating ? (
+                <>
+                  <Loader2 className="w-4 h-4 animate-spin" />
+                  <span>Consultando Mercado Pago...</span>
+                </>
+              ) : activationSuccess ? (
+                <>
+                  <CheckCircle2 className="w-4 h-4 text-white" />
+                  <span>Assinatura Ativada! 🎉</span>
+                </>
+              ) : (
+                <>
+                  <Sparkles className="w-4 h-4 text-amber-300" />
+                  <span>Já Paguei! Verificar Pagamento</span>
+                </>
+              )}
+            </button>
           </div>
 
-          <button
-            type="button"
-            onClick={handleConfirmPayment}
-            disabled={isActivating || activationSuccess}
-            className="w-full sm:w-auto px-6 py-3 rounded-2xl bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-700 hover:to-teal-700 text-white font-extrabold text-xs sm:text-sm flex items-center justify-center gap-2 shadow-lg shadow-emerald-200 transition-all active:scale-95 cursor-pointer flex-shrink-0"
-          >
-            {isActivating ? (
-              <>
-                <Loader2 className="w-4 h-4 animate-spin" />
-                <span>Validando Pagamento...</span>
-              </>
-            ) : activationSuccess ? (
-              <>
-                <CheckCircle2 className="w-4 h-4 text-white" />
-                <span>Assinatura Ativada! 🎉</span>
-              </>
-            ) : (
-              <>
-                <Sparkles className="w-4 h-4 text-amber-300" />
-                <span>Já Paguei! Ativar Minha Assinatura</span>
-              </>
-            )}
-          </button>
+          {/* Mensagem de Feedback de Verificação */}
+          {verificationMessage && (
+            <div
+              className={`p-3 rounded-xl text-xs font-medium border flex items-start gap-2 animate-in fade-in ${
+                verificationMessage.type === 'error'
+                  ? 'bg-rose-50 border-rose-200 text-rose-800'
+                  : 'bg-emerald-100 border-emerald-300 text-emerald-900'
+              }`}
+            >
+              {verificationMessage.type === 'error' ? (
+                <HelpCircle className="w-4 h-4 text-rose-600 flex-shrink-0 mt-0.5" />
+              ) : (
+                <CheckCircle2 className="w-4 h-4 text-emerald-700 flex-shrink-0 mt-0.5" />
+              )}
+              <span className="flex-1">{verificationMessage.text}</span>
+            </div>
+          )}
         </div>
 
         {/* Payment Methods & PIX Box */}

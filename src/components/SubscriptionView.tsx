@@ -155,7 +155,7 @@ export const SubscriptionView: React.FC<SubscriptionViewProps> = ({
     setTimeout(() => setCopiedPix(false), 3000);
   };
 
-  // Simular recebimento do Webhook de confirmação para testes
+  // Verificar recebimento real do pagamento no Mercado Pago e Supabase
   const handleSimulateWebhookPayment = async () => {
     if (!profile?.id) {
       alert('Faça login primeiro para ativar a assinatura.');
@@ -164,59 +164,87 @@ export const SubscriptionView: React.FC<SubscriptionViewProps> = ({
 
     setIsCheckingPayment(true);
     try {
-      // 1. Tenta chamar o Webhook na API local / Edge Function
-      const webhookRes = await fetch('/api/webhooks/payment', {
+      // 1. Consulta a rota de verificação segura com o Mercado Pago e Supabase
+      const res = await fetch(`/api/subscription/verify-payment?_t=${Date.now()}`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 'Content-Type': 'application/json', 'Cache-Control': 'no-cache' },
         body: JSON.stringify({
-          event: 'payment.approved',
-          data: {
-            id: `pay-${Date.now()}`,
-            status: 'approved',
-            user_id: profile.id,
-            plan: selectedPeriod,
-          },
+          userId: profile.id,
+          email: profile.email,
+          plan: selectedPeriod,
         }),
       }).catch(() => null);
 
-      // 2. Atualiza diretamente no Supabase ou localmente
-      const newExpiry = new Date();
-      newExpiry.setDate(newExpiry.getDate() + (selectedPeriod === 'anual' ? 365 : 30));
+      if (res && res.ok) {
+        const data = await res.json();
+        if (data.verified) {
+          const freshPlan = data.plan || selectedPeriod;
+          const updated: AtelieProfile = {
+            ...profile,
+            subscriptionStatus: 'active',
+            subscriptionPlan: freshPlan,
+            subscriptionExpiresAt: data.expiresAt || profile.subscriptionExpiresAt,
+          };
 
-      const { error: supaErr } = await supabase
-        .from('profiles')
-        .update({
-          subscription_status: 'active',
-          subscription_plan: selectedPeriod,
-          subscription_expires_at: newExpiry.toISOString(),
-          updated_at: new Date().toISOString(),
-        })
-        .eq('id', profile.id);
+          if (onProfileUpdated) {
+            onProfileUpdated(updated);
+          }
 
-      if (!supaErr && onProfileUpdated) {
-        const updated: AtelieProfile = {
-          ...profile,
-          subscriptionStatus: 'active',
-          subscriptionPlan: selectedPeriod,
-          subscriptionExpiresAt: newExpiry.toISOString(),
-        };
-        onProfileUpdated(updated);
-        try {
-          localStorage.setItem(`atelie_profile_${profile.id}`, JSON.stringify(updated));
-        } catch {}
+          try {
+            localStorage.setItem(`atelie_profile_${profile.id}`, JSON.stringify(updated));
+            const currentStored = localStorage.getItem('atelie_current_user_v3');
+            if (currentStored) {
+              const parsed = JSON.parse(currentStored);
+              localStorage.setItem(
+                'atelie_current_user_v3',
+                JSON.stringify({
+                  ...parsed,
+                  subscriptionStatus: 'active',
+                  subscriptionPlan: freshPlan,
+                  subscriptionExpiresAt: data.expiresAt || profile.subscriptionExpiresAt,
+                })
+              );
+            }
+          } catch {}
+
+          triggerConfetti();
+          setNotification({
+            type: 'success',
+            message: '🎉 Pagamento confirmado no Mercado Pago! Sua assinatura do Organize Ateliê foi ativada com sucesso.',
+          });
+          setPaymentSuccessData(null);
+          return;
+        } else {
+          setNotification({
+            type: 'error',
+            message: data.message || 'Pagamento ainda não confirmado pelo Mercado Pago. Se você acabou de pagar, aguarde alguns segundos para a compensação e tente novamente.',
+          });
+          return;
+        }
       }
 
-      triggerConfetti();
+      // 2. Fallback: consulta direta no Supabase
+      const fresh = await supabaseService.getProfile(profile.id);
+      if (fresh && (fresh.subscriptionStatus === 'active' || fresh.subscriptionStatus === 'admin')) {
+        if (onProfileUpdated) onProfileUpdated(fresh);
+        triggerConfetti();
+        setNotification({
+          type: 'success',
+          message: '🎉 Assinatura ativa e verificada no banco de dados!',
+        });
+        setPaymentSuccessData(null);
+        return;
+      }
+
       setNotification({
-        type: 'success',
-        message: '🎉 Pagamento confirmado com sucesso! Sua assinatura do Organize Ateliê foi ativada.',
+        type: 'error',
+        message: 'Nenhum pagamento aprovado foi localizado no Mercado Pago para esta conta ainda. Por favor, conclua o pagamento pelo link do Mercado Pago.',
       });
-      setPaymentSuccessData(null);
     } catch (e) {
       console.error(e);
       setNotification({
         type: 'error',
-        message: 'Não foi possível validar o pagamento automaticamente.',
+        message: 'Não foi possível validar o pagamento com o gateway no momento. Tente novamente em instantes.',
       });
     } finally {
       setIsCheckingPayment(false);

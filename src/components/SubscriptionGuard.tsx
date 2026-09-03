@@ -190,6 +190,45 @@ export const SubscriptionGuard: React.FC<SubscriptionGuardProps> = ({
               <span>Ver Planos & Assinar</span>
               <ArrowRight className="w-4 h-4" />
             </button>
+
+            <button
+              onClick={async () => {
+                const targetId = userId || currentProfile?.id;
+                if (!targetId) return;
+                setLoading(true);
+                try {
+                  const res = await fetch(`/api/subscription/verify-payment?_t=${Date.now()}`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json', 'Cache-Control': 'no-cache' },
+                    body: JSON.stringify({
+                      userId: targetId,
+                      email: currentProfile?.email,
+                    }),
+                  }).catch(() => null);
+
+                  if (res && res.ok) {
+                    const data = await res.json();
+                    if (data.verified) {
+                      window.location.reload();
+                      return;
+                    } else {
+                      alert(data.message || 'Nenhum pagamento aprovado foi localizado no Mercado Pago para esta conta ainda.');
+                    }
+                  } else {
+                    alert('Nenhum pagamento aprovado foi localizado ainda. Por favor, conclua o pagamento.');
+                  }
+                } catch (e) {
+                  console.error(e);
+                  alert('Erro ao consultar gateway de pagamento.');
+                } finally {
+                  setLoading(false);
+                }
+              }}
+              className="w-full sm:w-auto px-6 py-3.5 rounded-2xl bg-gradient-to-r from-emerald-600 to-teal-600 text-white font-extrabold text-sm shadow-md hover:from-emerald-700 hover:to-teal-700 active:scale-95 transition-all flex items-center justify-center gap-2 cursor-pointer"
+            >
+              <Sparkles className="w-4 h-4 text-amber-300" />
+              <span>Já Paguei! Verificar Pagamento</span>
+            </button>
           </div>
         </div>
       </div>

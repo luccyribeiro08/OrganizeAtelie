@@ -327,6 +327,27 @@ export default function App() {
                   }
                 : null
             );
+
+            // Verificação automática transparente em segundo plano com Mercado Pago
+            if (remoteProfile.subscriptionStatus === 'trial' && !remoteProfile.isAdmin && currentUser.id) {
+              fetch(`/api/subscription/verify-payment?_t=${Date.now()}`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ userId: currentUser.id, email: currentUser.email }),
+              })
+                .then((r) => (r.ok ? r.json() : null))
+                .then((verifyData) => {
+                  if (verifyData && verifyData.verified) {
+                    setProfile((prev) => ({
+                      ...prev,
+                      subscriptionStatus: 'active',
+                      subscriptionPlan: verifyData.plan || 'trimestral',
+                      subscriptionExpiresAt: verifyData.expiresAt,
+                    }));
+                  }
+                })
+                .catch(() => {});
+            }
           }
 
           // Pedidos

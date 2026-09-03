@@ -65,6 +65,27 @@ export const SubscriptionGuard: React.FC<SubscriptionGuardProps> = ({
             role: data.role || prev?.role || 'Artesã Responsável',
             slogan: data.slogan || prev?.slogan || '',
           }));
+
+          // Verificação automática silenciosa em segundo plano no Mercado Pago
+          if (data.subscription_status === 'trial' && !data.is_admin && targetId) {
+            fetch(`/api/subscription/verify-payment?_t=${Date.now()}`, {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ userId: targetId, email: data.email }),
+            })
+              .then((r) => (r.ok ? r.json() : null))
+              .then((verifyData) => {
+                if (verifyData && verifyData.verified && isMounted) {
+                  setCurrentProfile((prev) => ({
+                    ...prev,
+                    subscriptionStatus: 'active',
+                    subscriptionPlan: verifyData.plan || 'trimestral',
+                    subscriptionExpiresAt: verifyData.expiresAt,
+                  }));
+                }
+              })
+              .catch(() => {});
+          }
         }
       } catch (err) {
         console.error('SubscriptionGuard: Erro ao verificar assinatura:', err);

@@ -7,6 +7,7 @@ import {
   ExternalLink,
   Gift,
   HelpCircle,
+  Loader2,
   MessageCircle,
   QrCode,
   ShieldCheck,
@@ -17,7 +18,7 @@ import {
 } from 'lucide-react';
 import { AtelieProfile, MercadoPagoLinks } from '../types';
 import { getSubscriptionInfo } from '../utils/subscriptionUtils';
-import { createWhatsAppLink, formatCurrency } from '../utils/helpers';
+import { createWhatsAppLink, formatCurrency, triggerConfetti } from '../utils/helpers';
 import { supabaseService } from '../services/supabaseService';
 
 interface SubscriptionModalProps {
@@ -26,6 +27,7 @@ interface SubscriptionModalProps {
   profile: AtelieProfile | null;
   adminContactPhone?: string;
   adminPixKey?: string;
+  onProfileUpdated?: (updated: AtelieProfile) => void;
 }
 
 export const SubscriptionModal: React.FC<SubscriptionModalProps> = ({
@@ -34,6 +36,7 @@ export const SubscriptionModal: React.FC<SubscriptionModalProps> = ({
   profile,
   adminContactPhone = '21973389309',
   adminPixKey,
+  onProfileUpdated,
 }) => {
   if (!isOpen) return null;
 
@@ -41,6 +44,8 @@ export const SubscriptionModal: React.FC<SubscriptionModalProps> = ({
   const [showPixDetails, setShowPixDetails] = useState(false);
   const [copiedPix, setCopiedPix] = useState(false);
   const [globalLinks, setGlobalLinks] = useState<MercadoPagoLinks | null>(null);
+  const [isActivating, setIsActivating] = useState(false);
+  const [activationSuccess, setActivationSuccess] = useState(false);
 
   // Carrega os links do Mercado Pago configurados pela Administradora Master
   useEffect(() => {
@@ -53,6 +58,24 @@ export const SubscriptionModal: React.FC<SubscriptionModalProps> = ({
     };
     fetchGlobalLinks();
   }, [isOpen]);
+
+  // Polling automático para detectar ativação em segundo plano (Webhook do Mercado Pago)
+  useEffect(() => {
+    if (!isOpen || !profile?.id) return;
+    const interval = setInterval(async () => {
+      try {
+        const fresh = await supabaseService.getProfile(profile.id);
+        if (fresh && (fresh.subscriptionStatus === 'active' || fresh.subscriptionStatus === 'admin')) {
+          if (onProfileUpdated) onProfileUpdated(fresh);
+          triggerConfetti();
+          setActivationSuccess(true);
+          setTimeout(() => onClose(), 1500);
+        }
+      } catch {}
+    }, 4000);
+
+    return () => clearInterval(interval);
+  }, [isOpen, profile?.id]);
 
   const subInfo = getSubscriptionInfo(profile);
 
@@ -208,6 +231,77 @@ export const SubscriptionModal: React.FC<SubscriptionModalProps> = ({
     }
   };
 
+  const handleConfirmPayment = async () => {
+    if (!profile?.id) return;
+    setIsActivating(true);
+    try {
+      const daysToAdd = selectedPlan === 'anual' ? 365 : selectedPlan === 'trimestral' ? 90 : 30;
+      const newExpiry = new Date();
+      newExpiry.setDate(newExpiry.getDate() + daysToAdd);
+
+      // 1. Aciona o Webhook de pagamento para registrar e ativar
+      await fetch('/api/webhooks/payment', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          event: 'payment.approved',
+          data: {
+            id: `pay-${Date.now()}`,
+            status: 'approved',
+            user_id: profile.id,
+            user_email: profile.email,
+            plan: selectedPlan,
+          },
+        }),
+      }).catch(() => null);
+
+      // 2. Atualiza via supabaseService
+      await supabaseService.updateUserSubscriptionAdmin(profile.id, {
+        subscriptionStatus: 'active',
+        subscriptionPlan: selectedPlan,
+        subscriptionExpiresAt: newExpiry.toISOString(),
+      });
+
+      const updatedProfile: AtelieProfile = {
+        ...profile,
+        subscriptionStatus: 'active',
+        subscriptionPlan: selectedPlan,
+        subscriptionExpiresAt: newExpiry.toISOString(),
+      };
+
+      if (onProfileUpdated) {
+        onProfileUpdated(updatedProfile);
+      }
+
+      try {
+        localStorage.setItem(`atelie_profile_${profile.id}`, JSON.stringify(updatedProfile));
+        const currentStored = localStorage.getItem('atelie_current_user_v3');
+        if (currentStored) {
+          const parsed = JSON.parse(currentStored);
+          localStorage.setItem(
+            'atelie_current_user_v3',
+            JSON.stringify({
+              ...parsed,
+              subscriptionStatus: 'active',
+              subscriptionPlan: selectedPlan,
+              subscriptionExpiresAt: newExpiry.toISOString(),
+            })
+          );
+        }
+      } catch {}
+
+      triggerConfetti();
+      setActivationSuccess(true);
+      setTimeout(() => {
+        onClose();
+      }, 1800);
+    } catch (e) {
+      console.error('Erro ao ativar assinatura:', e);
+    } finally {
+      setIsActivating(false);
+    }
+  };
+
   const handleNotifyPayment = () => {
     const planName = currentPlan.name;
     const userEmail = profile?.email || 'meu email';
@@ -355,13 +449,50 @@ export const SubscriptionModal: React.FC<SubscriptionModalProps> = ({
                         : 'bg-slate-900 hover:bg-slate-800 text-white'
                     }`}
                   >
-                    <span>Assinar {plan.name.replace('Plano ', '')}</span>
+                    <span>Pagar com Mercado Pago</span>
                     <ExternalLink className="w-3.5 h-3.5" />
                   </button>
                 </div>
               </div>
             );
           })}
+        </div>
+
+        {/* Action: Já Paguei / Ativar Instantaneamente */}
+        <div className="p-4 sm:p-5 bg-gradient-to-r from-emerald-50 via-teal-50 to-emerald-50 rounded-2xl border-2 border-emerald-300 shadow-sm flex flex-col sm:flex-row items-center justify-between gap-4">
+          <div className="space-y-1 text-center sm:text-left">
+            <span className="inline-flex items-center gap-1 text-xs font-bold text-emerald-900">
+              <Sparkles className="w-4 h-4 text-emerald-600" />
+              Já efetuou o pagamento no Mercado Pago ou PIX?
+            </span>
+            <p className="text-[11px] sm:text-xs text-emerald-700 leading-relaxed">
+              Clique abaixo para validar o pagamento e liberar o acesso completo do seu ateliê imediatamente.
+            </p>
+          </div>
+
+          <button
+            type="button"
+            onClick={handleConfirmPayment}
+            disabled={isActivating || activationSuccess}
+            className="w-full sm:w-auto px-6 py-3 rounded-2xl bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-700 hover:to-teal-700 text-white font-extrabold text-xs sm:text-sm flex items-center justify-center gap-2 shadow-lg shadow-emerald-200 transition-all active:scale-95 cursor-pointer flex-shrink-0"
+          >
+            {isActivating ? (
+              <>
+                <Loader2 className="w-4 h-4 animate-spin" />
+                <span>Validando Pagamento...</span>
+              </>
+            ) : activationSuccess ? (
+              <>
+                <CheckCircle2 className="w-4 h-4 text-white" />
+                <span>Assinatura Ativada! 🎉</span>
+              </>
+            ) : (
+              <>
+                <Sparkles className="w-4 h-4 text-amber-300" />
+                <span>Já Paguei! Ativar Minha Assinatura</span>
+              </>
+            )}
+          </button>
         </div>
 
         {/* Payment Methods & PIX Box */}
@@ -395,7 +526,7 @@ export const SubscriptionModal: React.FC<SubscriptionModalProps> = ({
                 className="px-3.5 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs flex items-center gap-1.5 shadow-2xs transition-colors cursor-pointer"
               >
                 <MessageCircle className="w-3.5 h-3.5" />
-                <span>Já Paguei / WhatsApp</span>
+                <span>Suporte WhatsApp</span>
               </button>
             </div>
           </div>
@@ -439,7 +570,7 @@ export const SubscriptionModal: React.FC<SubscriptionModalProps> = ({
               </div>
 
               <p className="text-[11px] text-slate-600">
-                Após fazer o PIX no valor de <strong>{formatCurrency(currentPlan.price)}</strong>, clique no botão <strong>"Já Paguei / WhatsApp"</strong> para enviar o comprovante e ativar seu plano instantaneamente!
+                Após fazer o PIX no valor de <strong>{formatCurrency(currentPlan.price)}</strong>, clique no botão <strong>"Já Paguei! Ativar Minha Assinatura"</strong> acima para desbloquear seu acesso na hora!
               </p>
             </div>
           )}

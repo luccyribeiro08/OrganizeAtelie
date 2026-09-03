@@ -1441,6 +1441,7 @@ export default function App() {
         profile={profile}
         adminContactPhone={profile.phone}
         adminPixKey={profile.pixKey}
+        onProfileUpdated={(updated) => setProfile(updated)}
       />
     </div>
   );

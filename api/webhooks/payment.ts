@@ -186,6 +186,27 @@ export default async function handler(req: any, res: any) {
       });
     }
 
+    if (!userId) {
+      const userEmail =
+        body.user_email ||
+        body.email ||
+        body.data?.user_email ||
+        body.data?.email ||
+        body.data?.payer_email;
+
+      if (userEmail) {
+        const { data: profileByEmail } = await supabaseAdmin
+          .from('profiles')
+          .select('id')
+          .ilike('email', String(userEmail).trim())
+          .maybeSingle();
+
+        if (profileByEmail?.id) {
+          userId = profileByEmail.id;
+        }
+      }
+    }
+
     // 8. SE APROVADO, MAS NÃO TEMOS O USER_ID
     if (!userId) {
       console.warn('[Webhook MP] ⚠️ Pagamento aprovado, mas user_id / external_reference não foi identificado.');
@@ -195,12 +216,12 @@ export default async function handler(req: any, res: any) {
       });
     }
 
-    // 9. CÁLCULO DA DATA DE EXPIRAÇÃO (+30 dias ou +365 dias para anual)
+    // 9. CÁLCULO DA DATA DE EXPIRAÇÃO (+30 dias mensal, +90 trimestral ou +365 anual)
     const daysToAdd = plan === 'anual' ? 365 : plan === 'trimestral' ? 90 : 30;
     const expiresAt = new Date();
     expiresAt.setDate(expiresAt.getDate() + daysToAdd);
 
-    // 10. ATUALIZAÇÃO NO SUPABASE NA TABELA PROFILES
+    // 10. ATUALIZAÇÃO NO SUPABASE NA TABELA PROFILES (por ID ou por e-mail)
     const { data: updatedProfile, error: updateError } = await supabaseAdmin
       .from('profiles')
       .update({
@@ -209,7 +230,7 @@ export default async function handler(req: any, res: any) {
         subscription_expires_at: expiresAt.toISOString(),
         updated_at: new Date().toISOString(),
       })
-      .eq('id', userId)
+      .or(`id.eq.${userId},email.ilike.${userId}`)
       .select('id, name, email, subscription_status, subscription_plan, subscription_expires_at')
       .maybeSingle();
 

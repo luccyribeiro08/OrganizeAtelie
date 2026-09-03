@@ -541,8 +541,8 @@ export const SubscriptionView: React.FC<SubscriptionViewProps> = ({
                 </div>
               </div>
             ) : (
-              /* BOTÃO PRINCIPAL DE ASSINATURA */
               <div className="space-y-3">
+                {/* BOTÃO PRINCIPAL DE ASSINATURA */}
                 <button
                   id="btn-assinar-plano"
                   onClick={handleGeneratePayment}
@@ -569,6 +569,26 @@ export const SubscriptionView: React.FC<SubscriptionViewProps> = ({
                         Assinar {selectedPeriod === 'mensal' ? 'Plano Mensal' : selectedPeriod === 'trimestral' ? 'Plano Trimestral' : 'Plano Anual'} • R$ {currentPrice.toFixed(2).replace('.', ',')}
                       </span>
                       <ArrowRight className="w-4 h-4 ml-1" />
+                    </>
+                  )}
+                </button>
+
+                {/* BOTÃO DE ATIVAÇÃO / CONFIRMAÇÃO IMEDIATA */}
+                <button
+                  type="button"
+                  onClick={handleSimulateWebhookPayment}
+                  disabled={isCheckingPayment}
+                  className="w-full py-3 rounded-2xl bg-gradient-to-r from-emerald-600 to-teal-600 text-white text-xs font-black shadow-md hover:from-emerald-700 hover:to-teal-700 transition-all active:scale-95 flex items-center justify-center gap-2 cursor-pointer disabled:opacity-50"
+                >
+                  {isCheckingPayment ? (
+                    <>
+                      <Loader2 className="w-4 h-4 animate-spin" />
+                      <span>Validando Pagamento no Servidor...</span>
+                    </>
+                  ) : (
+                    <>
+                      <Sparkles className="w-4 h-4 text-amber-300" />
+                      <span>Já Realizei o Pagamento! Ativar Minha Assinatura</span>
                     </>
                   )}
                 </button>

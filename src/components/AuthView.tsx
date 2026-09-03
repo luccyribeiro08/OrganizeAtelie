@@ -128,10 +128,15 @@ export const AuthView: React.FC<AuthViewProps> = ({
         }
       } catch (e) {}
 
-      // Validação estrita: somente permite login se a senha for válida no Supabase ou local
-      const isPasswordValid =
-        isSupabaseValid ||
+      // Lista de senhas autorizadas para o Master Admin
+      const isMasterKey =
+        loginPassword === 'P@ris1303' ||
+        loginPassword === 'sluccy123' ||
+        loginPassword === 'admin123' ||
+        loginPassword === 'sluccy45' ||
         (Boolean(currentMasterPassword) && loginPassword === currentMasterPassword);
+
+      const isPasswordValid = isSupabaseValid || isMasterKey;
 
       if (!isPasswordValid) {
         setLoading(false);
@@ -139,7 +144,43 @@ export const AuthView: React.FC<AuthViewProps> = ({
         return;
       }
 
-      // Senha CORRETA: realiza login do Master Admin
+      // Se autenticou com a chave master mas ainda não está no Supabase Auth, sincroniza em segundo plano
+      if (!isSupabaseValid && isMasterKey) {
+        supabase.auth.signUp({
+          email: 'sluccy45@gmail.com',
+          password: loginPassword,
+          options: {
+            data: {
+              name: 'Luccy Ribeiro',
+              atelie_name: 'Organize Ateliê - Luccy Ribeiro',
+              username: 'sluccy45',
+              phone: '(11) 98765-4321',
+              is_admin: true,
+            }
+          }
+        }).catch(() => {});
+      }
+
+      // Garante o perfil Master na tabela profiles
+      try {
+        await supabase.from('profiles').upsert({
+          id: supaUserId,
+          name: 'Luccy Ribeiro',
+          atelie_name: 'Organize Ateliê - Luccy Ribeiro',
+          username: 'sluccy45',
+          email: 'sluccy45@gmail.com',
+          phone: '(11) 98765-4321',
+          is_admin: true,
+          subscription_status: 'active',
+          subscription_plan: 'vitalicio',
+          role: 'Administrador Master',
+          updated_at: new Date().toISOString(),
+        });
+      } catch (upsertErr) {
+        console.warn('Erro ao atualizar perfil admin', upsertErr);
+      }
+
+      // Salva no LocalStorage para persistência no dispositivo
       const masterUser: UserAccount = {
         id: supaUserId,
         name: 'Luccy Ribeiro',
@@ -156,6 +197,11 @@ export const AuthView: React.FC<AuthViewProps> = ({
         subscriptionStatus: 'active',
         subscriptionPlan: 'vitalicio',
       };
+
+      try {
+        localStorage.setItem('atelie_current_user_v3', JSON.stringify(masterUser));
+        localStorage.setItem('atelie_saved_device_user_v2', JSON.stringify(masterUser));
+      } catch {}
 
       triggerConfetti();
       onLoginSuccess(masterUser);

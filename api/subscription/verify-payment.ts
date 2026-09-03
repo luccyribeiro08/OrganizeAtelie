@@ -96,33 +96,43 @@ export default async function handler(req: any, res: any) {
     let verifiedViaMp = false;
     let detectedPlan = plan || 'mensal';
     let matchedPayment: any = null;
+    let searchDebugInfo = {
+      mpTokenConfigured: Boolean(mpAccessToken),
+      queriedMethods: [] as string[],
+      totalResultsFound: 0,
+    };
 
     if (mpAccessToken) {
       try {
-        // A) Se tiver ID específico do pagamento informado
+        // A) Se tiver ID específico do pagamento informado pelo comprovante
         if (paymentId) {
-          const cleanPid = String(paymentId).trim();
-          const pRes = await fetch(`https://api.mercadopago.com/v1/payments/${cleanPid}`, {
-            headers: { Authorization: `Bearer ${mpAccessToken}` },
-          });
-          if (pRes.ok) {
-            const pData = await pRes.json();
-            if (pData.status === 'approved' || pData.status === 'authorized') {
-              verifiedViaMp = true;
-              matchedPayment = pData;
+          searchDebugInfo.queriedMethods.push(`paymentId:${paymentId}`);
+          const cleanPid = String(paymentId).replace(/\D/g, '').trim();
+          if (cleanPid) {
+            const pRes = await fetch(`https://api.mercadopago.com/v1/payments/${cleanPid}`, {
+              headers: { Authorization: `Bearer ${mpAccessToken}` },
+            });
+            if (pRes.ok) {
+              const pData = await pRes.json();
+              if (pData.status === 'approved' || pData.status === 'authorized') {
+                verifiedViaMp = true;
+                matchedPayment = pData;
+              }
             }
           }
         }
 
         // B) Busca por e-mail do pagador
         if (!verifiedViaMp && cleanEmail) {
-          const searchUrl = `https://api.mercadopago.com/v1/payments/search?sort=date_created&criteria=desc&limit=10&payer.email=${encodeURIComponent(cleanEmail)}`;
+          searchDebugInfo.queriedMethods.push(`payer.email:${cleanEmail}`);
+          const searchUrl = `https://api.mercadopago.com/v1/payments/search?sort=date_created&criteria=desc&limit=15&payer.email=${encodeURIComponent(cleanEmail)}`;
           const mpRes = await fetch(searchUrl, {
             headers: { Authorization: `Bearer ${mpAccessToken}` },
           });
           if (mpRes.ok) {
             const searchData = await mpRes.json();
             const results = searchData.results || [];
+            searchDebugInfo.totalResultsFound += results.length;
             const approved = results.find((p: any) => p.status === 'approved' || p.status === 'authorized');
             if (approved) {
               verifiedViaMp = true;
@@ -133,13 +143,15 @@ export default async function handler(req: any, res: any) {
 
         // C) Busca por external_reference (ID do usuário)
         if (!verifiedViaMp && cleanUserId) {
-          const searchUrl = `https://api.mercadopago.com/v1/payments/search?sort=date_created&criteria=desc&limit=10&external_reference=${encodeURIComponent(cleanUserId)}`;
+          searchDebugInfo.queriedMethods.push(`external_reference:${cleanUserId}`);
+          const searchUrl = `https://api.mercadopago.com/v1/payments/search?sort=date_created&criteria=desc&limit=15&external_reference=${encodeURIComponent(cleanUserId)}`;
           const mpRes = await fetch(searchUrl, {
             headers: { Authorization: `Bearer ${mpAccessToken}` },
           });
           if (mpRes.ok) {
             const searchData = await mpRes.json();
             const results = searchData.results || [];
+            searchDebugInfo.totalResultsFound += results.length;
             const approved = results.find((p: any) => p.status === 'approved' || p.status === 'authorized');
             if (approved) {
               verifiedViaMp = true;
@@ -148,43 +160,47 @@ export default async function handler(req: any, res: any) {
           }
         }
 
-        // D) Busca pagamentos recentes aprovados na conta da vendedora nas últimas 4 horas
+        // D) Busca ampla: Últimos pagamentos aprovados recebidos na conta da vendedora nas últimas 24 horas
         if (!verifiedViaMp) {
-          const recentUrl = `https://api.mercadopago.com/v1/payments/search?sort=date_created&criteria=desc&limit=20&status=approved`;
+          searchDebugInfo.queriedMethods.push('recent_seller_payments_24h');
+          const recentUrl = `https://api.mercadopago.com/v1/payments/search?sort=date_created&criteria=desc&limit=30`;
           const recentRes = await fetch(recentUrl, {
             headers: { Authorization: `Bearer ${mpAccessToken}` },
           });
           if (recentRes.ok) {
             const recentData = await recentRes.json();
             const results = recentData.results || [];
-            const fourHoursAgo = new Date(Date.now() - 4 * 60 * 60 * 1000);
+            searchDebugInfo.totalResultsFound += results.length;
+            const oneDayAgo = new Date(Date.now() - 24 * 60 * 60 * 1000);
 
-            // Procura pagamentos aprovados recentes com valor compatível com planos
+            // Procura qualquer pagamento aprovado recente nas últimas 24h
             const recentApproved = results.find((p: any) => {
               if (p.status !== 'approved' && p.status !== 'authorized') return false;
-              const pDate = new Date(p.date_approved || p.date_created);
-              if (pDate < fourHoursAgo) return false;
+              const dateStr = p.date_approved || p.date_created;
+              if (dateStr) {
+                const pDate = new Date(dateStr);
+                if (pDate < oneDayAgo) return false;
+              }
               const amt = Number(p.transaction_amount || 0);
-              // Aceita valores de planos (29.90, 34.99, 79.90, 239.90, etc.)
-              return amt >= 10;
+              return amt >= 5; // Valores válidos de planos
             });
 
             if (recentApproved) {
               verifiedViaMp = true;
               matchedPayment = recentApproved;
-              console.log('[VerifyPayment API] Pagamento aprovado recente localizado:', recentApproved.id, recentApproved.transaction_amount);
+              console.log('[VerifyPayment API] Pagamento recente aprovado localizado na conta:', recentApproved.id, recentApproved.transaction_amount);
             }
           }
         }
 
-        // Determina o plano exato a partir do valor ou metadados
+        // Determina o plano exato a partir do valor pago ou metadados
         if (matchedPayment) {
           const amount = Number(matchedPayment.transaction_amount || 0);
           if (amount >= 200) {
             detectedPlan = 'anual';
           } else if (amount >= 34) {
             detectedPlan = 'trimestral';
-          } else if (amount >= 15) {
+          } else if (amount >= 14) {
             detectedPlan = 'mensal';
           } else {
             detectedPlan = matchedPayment.metadata?.plan || plan || 'trimestral';
@@ -242,6 +258,7 @@ export default async function handler(req: any, res: any) {
       verified: false,
       status: profile?.subscription_status || 'trial',
       message: 'Ainda não identificamos nenhum pagamento aprovado no Mercado Pago para esta conta. Se você acabou de pagar, aguarde alguns instantes para a compensação ou envie o comprovante no WhatsApp.',
+      debug: searchDebugInfo,
     });
   } catch (err: any) {
     console.error('[VerifyPayment API] Erro geral:', err);

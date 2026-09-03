@@ -49,6 +49,8 @@ export const SubscriptionView: React.FC<SubscriptionViewProps> = ({
   } | null>(null);
   const [copiedPix, setCopiedPix] = useState(false);
   const [isCheckingPayment, setIsCheckingPayment] = useState(false);
+  const [paymentIdInput, setPaymentIdInput] = useState('');
+  const [showIdInput, setShowIdInput] = useState(false);
   const [notification, setNotification] = useState<{
     type: 'success' | 'error' | 'info';
     message: string;
@@ -156,7 +158,7 @@ export const SubscriptionView: React.FC<SubscriptionViewProps> = ({
   };
 
   // Verificar recebimento real do pagamento no Mercado Pago e Supabase
-  const handleSimulateWebhookPayment = async () => {
+  const handleSimulateWebhookPayment = async (customPaymentId?: string) => {
     if (!profile?.id) {
       alert('Faça login primeiro para ativar a assinatura.');
       return;
@@ -164,6 +166,8 @@ export const SubscriptionView: React.FC<SubscriptionViewProps> = ({
 
     setIsCheckingPayment(true);
     try {
+      const pid = customPaymentId || (paymentIdInput ? paymentIdInput.trim() : undefined);
+
       // 1. Consulta a rota de verificação segura com o Mercado Pago e Supabase
       const res = await fetch(`/api/subscription/verify-payment?_t=${Date.now()}`, {
         method: 'POST',
@@ -172,6 +176,7 @@ export const SubscriptionView: React.FC<SubscriptionViewProps> = ({
           userId: profile.id,
           email: profile.email,
           plan: selectedPeriod,
+          paymentId: pid,
         }),
       }).catch(() => null);
 
@@ -210,35 +215,22 @@ export const SubscriptionView: React.FC<SubscriptionViewProps> = ({
           triggerConfetti();
           setNotification({
             type: 'success',
-            message: '🎉 Pagamento confirmado no Mercado Pago! Sua assinatura do Organize Ateliê foi ativada com sucesso.',
+            message: '🎉 Pagamento aprovado no Mercado Pago! Sua assinatura do Organize Ateliê foi ativada com sucesso.',
           });
           setPaymentSuccessData(null);
           return;
         } else {
           setNotification({
             type: 'error',
-            message: data.message || 'Pagamento ainda não confirmado pelo Mercado Pago. Se você acabou de pagar, aguarde alguns segundos para a compensação e tente novamente.',
+            message: data.message || 'Pagamento ainda não confirmado pelo Mercado Pago.',
           });
           return;
         }
       }
 
-      // 2. Fallback: consulta direta no Supabase
-      const fresh = await supabaseService.getProfile(profile.id);
-      if (fresh && (fresh.subscriptionStatus === 'active' || fresh.subscriptionStatus === 'admin')) {
-        if (onProfileUpdated) onProfileUpdated(fresh);
-        triggerConfetti();
-        setNotification({
-          type: 'success',
-          message: '🎉 Assinatura ativa e verificada no banco de dados!',
-        });
-        setPaymentSuccessData(null);
-        return;
-      }
-
       setNotification({
         type: 'error',
-        message: 'Nenhum pagamento aprovado foi localizado no Mercado Pago para esta conta ainda. Por favor, conclua o pagamento pelo link do Mercado Pago.',
+        message: 'Nenhum pagamento aprovado foi localizado no Mercado Pago para esta conta ainda. Realize o pagamento ou envie o comprovante no WhatsApp.',
       });
     } catch (e) {
       console.error(e);
@@ -604,7 +596,7 @@ export const SubscriptionView: React.FC<SubscriptionViewProps> = ({
                 {/* BOTÃO DE ATIVAÇÃO / CONFIRMAÇÃO IMEDIATA */}
                 <button
                   type="button"
-                  onClick={handleSimulateWebhookPayment}
+                  onClick={() => handleSimulateWebhookPayment()}
                   disabled={isCheckingPayment}
                   className="w-full py-3 rounded-2xl bg-gradient-to-r from-emerald-600 to-teal-600 text-white text-xs font-black shadow-md hover:from-emerald-700 hover:to-teal-700 transition-all active:scale-95 flex items-center justify-center gap-2 cursor-pointer disabled:opacity-50"
                 >
@@ -620,6 +612,37 @@ export const SubscriptionView: React.FC<SubscriptionViewProps> = ({
                     </>
                   )}
                 </button>
+
+                {/* Opção de busca por Nº do Pagamento se o e-mail não bater */}
+                <div className="pt-2 border-t border-slate-200/80 flex flex-col items-center justify-center gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setShowIdInput(!showIdInput)}
+                    className="text-[11px] text-emerald-800 hover:underline font-semibold cursor-pointer"
+                  >
+                    {showIdInput ? 'Ocultar busca por Nº do Comprovante' : 'Pagou com outro e-mail? Digite o Nº do Pagamento'}
+                  </button>
+
+                  {showIdInput && (
+                    <div className="flex items-center gap-2 w-full">
+                      <input
+                        type="text"
+                        placeholder="Ex: 12345678901"
+                        value={paymentIdInput}
+                        onChange={(e) => setPaymentIdInput(e.target.value)}
+                        className="bg-white border border-emerald-300 rounded-xl px-3 py-1.5 text-xs text-slate-800 flex-1 focus:outline-hidden focus:ring-1 focus:ring-emerald-500"
+                      />
+                      <button
+                        type="button"
+                        onClick={() => handleSimulateWebhookPayment()}
+                        disabled={isCheckingPayment || !paymentIdInput.trim()}
+                        className="px-3 py-1.5 rounded-xl bg-emerald-700 hover:bg-emerald-800 text-white font-bold text-xs disabled:opacity-50 cursor-pointer whitespace-nowrap"
+                      >
+                        Validar ID
+                      </button>
+                    </div>
+                  )}
+                </div>
 
                 <p className="text-[11px] text-center text-slate-500 flex items-center justify-center gap-1">
                   <ShieldCheck className="w-3.5 h-3.5 text-emerald-600" />

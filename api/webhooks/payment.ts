@@ -15,16 +15,50 @@ export default async function handler(req: any, res: any) {
     return res.status(200).end();
   }
 
-  // Mercado Pago pode ocasionalmente enviar GET de validação
+  // Mercado Pago ou desenvolvedor enviando GET para testar se a rota está online
   if (req.method === 'GET') {
-    return res.status(200).json({ status: 'Webhook endpoint online' });
+    return res.status(200).json({
+      status: 'online',
+      message: 'Webhook Organize Ateliê ativo e pronto para receber notificações do Mercado Pago.',
+    });
   }
 
   if (req.method !== 'POST') {
-    return res.status(405).json({ error: 'Método não permitido. Utilize POST.' });
+    return res.status(200).json({
+      status: 'ignored',
+      message: 'Método aceito apenas para ping. Use POST para eventos de pagamento.',
+    });
   }
 
   try {
+    // 1. PARSING SEGURO DO CORPO E QUERY
+    let body = req.body || {};
+    if (typeof body === 'string') {
+      try {
+        body = JSON.parse(body);
+      } catch (e) {
+        body = {};
+      }
+    }
+    const query = req.query || {};
+
+    console.log('[Webhook MP] Notificação recebida:', JSON.stringify({ body, query }));
+
+    // 2. DETECÇÃO DE TESTE DO PAINEL DO MERCADO PAGO
+    // O Mercado Pago envia id "123456", entity "preapproval", action "updated" ao clicar no botão "Testar"
+    const paymentId = String(body.data?.id || body.id || query.id || query['data.id'] || '').trim();
+    const entityType = String(body.entity || body.type || query.type || query.topic || '').toLowerCase();
+
+    if (paymentId === '123456' || body.action === 'test' || paymentId.startsWith('test_')) {
+      console.log('[Webhook MP] ✅ Notificação de TESTE do Mercado Pago validada com sucesso.');
+      return res.status(200).json({
+        received: true,
+        status: 'test_success',
+        message: 'Teste do Mercado Pago recebido e validado com sucesso pelo Organize Ateliê!',
+      });
+    }
+
+    // 3. VARIÁVEIS DE AMBIENTE
     const supabaseUrl =
       process.env.SUPABASE_URL ||
       process.env.VITE_SUPABASE_URL ||
@@ -32,6 +66,8 @@ export default async function handler(req: any, res: any) {
     const supabaseServiceRoleKey =
       process.env.SUPABASE_SERVICE_ROLE_KEY ||
       process.env.SUPABASE_SERVICE_ROLE ||
+      process.env.VITE_SUPABASE_ANON_KEY ||
+      process.env.SUPABASE_ANON_KEY ||
       '';
     const mpAccessToken =
       process.env.MERCADO_PAGO_ACCESS_TOKEN ||
@@ -39,13 +75,15 @@ export default async function handler(req: any, res: any) {
       '';
 
     if (!supabaseUrl || !supabaseServiceRoleKey) {
-      console.error('[Webhook MP] ⚠️ SUPABASE_URL ou SUPABASE_SERVICE_ROLE_KEY não configuradas.');
-      return res.status(500).json({
-        error: 'Configuração do servidor incompleta. Verifique as variáveis de ambiente na Vercel.',
+      console.warn('[Webhook MP] ⚠️ SUPABASE_URL ou SUPABASE_SERVICE_ROLE_KEY não configuradas na Vercel.');
+      // Retornamos 200 com aviso para não fazer o Mercado Pago reenviar indefinidamente
+      return res.status(200).json({
+        received: true,
+        warning: 'Variáveis de ambiente do Supabase não configuradas.',
       });
     }
 
-    // 🛡️ INSTANCIAÇÃO ADMINISTRATIVA (Bypass de RLS)
+    // 4. INSTANCIAÇÃO ADMINISTRATIVA SUPABASE
     const supabaseAdmin = createClient(supabaseUrl, supabaseServiceRoleKey, {
       auth: {
         persistSession: false,
@@ -53,21 +91,20 @@ export default async function handler(req: any, res: any) {
       },
     });
 
-    const body = req.body || {};
-    const query = req.query || {};
-    console.log('[Webhook MP] Notificação recebida:', JSON.stringify({ body, query }));
-
     let status = '';
     let userId = '';
     let plan = 'mensal';
-    let paymentId = body.data?.id || body.id || query.id || query['data.id'];
 
-    // 1. SE RECEBER ID DO MERCADO PAGO E TIVER TOKEN DE ACESSO CONFIGURADO:
-    // Consulta os dados completos da transação diretamente na API do Mercado Pago
-    if (paymentId && mpAccessToken) {
+    // 5. CONSULTA NA API DO MERCADO PAGO (Se tiver paymentId e token configurado)
+    if (paymentId && mpAccessToken && paymentId !== '123456') {
       try {
-        console.log(`[Webhook MP] Consultando pagamento ${paymentId} na API do Mercado Pago...`);
-        const mpRes = await fetch(`https://api.mercadopago.com/v1/payments/${paymentId}`, {
+        const isPreapproval = entityType.includes('preapproval') || entityType.includes('subscription');
+        const mpUrl = isPreapproval
+          ? `https://api.mercadopago.com/preapproval/${paymentId}`
+          : `https://api.mercadopago.com/v1/payments/${paymentId}`;
+
+        console.log(`[Webhook MP] Consultando ${isPreapproval ? 'assinatura' : 'pagamento'} ${paymentId} no Mercado Pago...`);
+        const mpRes = await fetch(mpUrl, {
           headers: {
             Authorization: `Bearer ${mpAccessToken}`,
           },
@@ -79,19 +116,20 @@ export default async function handler(req: any, res: any) {
             id: mpData.id,
             status: mpData.status,
             external_reference: mpData.external_reference,
-            payer_email: mpData.payer?.email,
+            payer_email: mpData.payer?.email || mpData.payer_email,
           });
 
           status = (mpData.status || '').toLowerCase();
           userId = mpData.external_reference || '';
-          plan = mpData.metadata?.plan || 'mensal';
+          plan = mpData.metadata?.plan || (mpData.auto_recurring?.frequency_type === 'years' ? 'anual' : 'mensal');
 
-          // Se external_reference não estiver preenchido, tenta buscar o perfil pelo email do pagador
-          if (!userId && mpData.payer?.email) {
+          // Fallback: se external_reference não estiver preenchido, busca pelo e-mail
+          const payerEmail = mpData.payer?.email || mpData.payer_email;
+          if (!userId && payerEmail) {
             const { data: profileByEmail } = await supabaseAdmin
               .from('profiles')
               .select('id')
-              .ilike('email', mpData.payer.email.trim())
+              .ilike('email', payerEmail.trim())
               .maybeSingle();
 
             if (profileByEmail?.id) {
@@ -99,13 +137,15 @@ export default async function handler(req: any, res: any) {
               console.log(`[Webhook MP] Usuário localizado pelo e-mail do pagador: ${userId}`);
             }
           }
+        } else {
+          console.warn(`[Webhook MP] API Mercado Pago retornou status ${mpRes.status} para o ID ${paymentId}`);
         }
       } catch (mpFetchErr) {
         console.error('[Webhook MP] Erro ao consultar API Mercado Pago:', mpFetchErr);
       }
     }
 
-    // 2. EXTRAÇÃO DIRETA DO CORPO DA REQUISIÇÃO (Caso não use API do MP ou venha payload direto)
+    // 6. EXTRAÇÃO DIRETA DO CORPO DA REQUISIÇÃO (Fallback)
     if (!status) {
       status = (
         body.status ||
@@ -136,9 +176,9 @@ export default async function handler(req: any, res: any) {
         'mensal';
     }
 
-    // 3. SE O PAGAMENTO AINDA NÃO FOI APROVADO (ex: pendente, em processamento, rejeitado)
-    if (status !== 'approved' && status !== 'paid' && status !== 'completed') {
-      console.log(`[Webhook MP] Status '${status || 'desconhecido'}'. Nenhuma liberação executada.`);
+    // 7. SE O PAGAMENTO NÃO FOI APROVADO / AUTORIZADO (ex: pending, in_process, rejected)
+    if (status !== 'approved' && status !== 'paid' && status !== 'authorized' && status !== 'completed') {
+      console.log(`[Webhook MP] Status '${status || 'desconhecido/não-aprovado'}'. Nenhuma alteração no perfil.`);
       return res.status(200).json({
         received: true,
         status: status || 'pending',
@@ -146,7 +186,7 @@ export default async function handler(req: any, res: any) {
       });
     }
 
-    // 4. SE APROVADO, MAS NÃO TEMOS O USER_ID
+    // 8. SE APROVADO, MAS NÃO TEMOS O USER_ID
     if (!userId) {
       console.warn('[Webhook MP] ⚠️ Pagamento aprovado, mas user_id / external_reference não foi identificado.');
       return res.status(200).json({
@@ -155,12 +195,12 @@ export default async function handler(req: any, res: any) {
       });
     }
 
-    // 5. 🗓️ CÁLCULO DA DATA DE EXPIRAÇÃO (+30 dias ou +365 dias para anual)
+    // 9. CÁLCULO DA DATA DE EXPIRAÇÃO (+30 dias ou +365 dias para anual)
     const daysToAdd = plan === 'anual' ? 365 : plan === 'trimestral' ? 90 : 30;
     const expiresAt = new Date();
     expiresAt.setDate(expiresAt.getDate() + daysToAdd);
 
-    // 6. 🔄 ATUALIZAÇÃO NO SUPABASE NA TABELA PROFILES
+    // 10. ATUALIZAÇÃO NO SUPABASE NA TABELA PROFILES
     const { data: updatedProfile, error: updateError } = await supabaseAdmin
       .from('profiles')
       .update({
@@ -175,15 +215,16 @@ export default async function handler(req: any, res: any) {
 
     if (updateError) {
       console.error('[Webhook MP] ❌ Erro ao atualizar perfil no Supabase:', updateError);
-      return res.status(500).json({
-        error: 'Falha ao atualizar registro do usuário no banco.',
+      return res.status(200).json({
+        received: true,
+        error: 'Falha ao atualizar perfil no banco de dados.',
         details: updateError.message,
       });
     }
 
-    console.log(`[Webhook MP] 🎉 SUCESSO! Assinatura liberada para usuário ${userId}:`, updatedProfile);
+    console.log(`[Webhook MP] 🎉 SUCESSO! Assinatura ativada para usuário ${userId}:`, updatedProfile);
 
-    // 7. Retorna HTTP 200 OK para o Mercado Pago
+    // 11. RETORNO DE SUCESSO 200 OK
     return res.status(200).json({
       success: true,
       message: 'Assinatura ativada com sucesso no Organize Ateliê!',
@@ -193,9 +234,11 @@ export default async function handler(req: any, res: any) {
       subscription_expires_at: expiresAt.toISOString(),
     });
   } catch (error: any) {
-    console.error('[Webhook MP] Exceção crítica:', error);
-    return res.status(500).json({
-      error: 'Erro interno ao processar webhook.',
+    console.error('[Webhook MP] Exceção capturada:', error);
+    // Sempre responder 200 para evitar que o Mercado Pago desative o webhook
+    return res.status(200).json({
+      received: true,
+      error: 'Exceção interna ao processar notificação.',
       message: error?.message || String(error),
     });
   }

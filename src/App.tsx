@@ -319,11 +319,19 @@ export default function App() {
           const remoteProfile = await supabaseService.getProfile(currentUser.id);
           if (remoteProfile) {
             setProfile((prev) => ({ ...prev, ...remoteProfile }));
+            setCurrentUser((prev) =>
+              prev
+                ? {
+                    ...prev,
+                    isAdmin: Boolean(remoteProfile.isAdmin),
+                  }
+                : null
+            );
           }
 
           // Pedidos
           const remoteOrders = await supabaseService.getOrders(currentUser.id);
-          if (remoteOrders && remoteOrders.length > 0) {
+          if (remoteOrders) {
             setOrders(remoteOrders);
             try {
               localStorage.setItem(`atelie_orders_${currentUser.id}`, JSON.stringify(remoteOrders));
@@ -332,7 +340,7 @@ export default function App() {
 
           // Catálogo
           const remoteCatalog = await supabaseService.getCatalog(currentUser.id);
-          if (remoteCatalog && remoteCatalog.length > 0) {
+          if (remoteCatalog) {
             setCatalog(remoteCatalog);
             try {
               localStorage.setItem(`atelie_catalog_${currentUser.id}`, JSON.stringify(remoteCatalog));
@@ -341,7 +349,7 @@ export default function App() {
 
           // Categorias
           const remoteCats = await supabaseService.getCatalogCategories(currentUser.id);
-          if (remoteCats && remoteCats.length > 0) {
+          if (remoteCats) {
             setCatalogCategories(remoteCats);
             try {
               localStorage.setItem(`atelie_categories_${currentUser.id}`, JSON.stringify(remoteCats));
@@ -350,7 +358,7 @@ export default function App() {
 
           // Tipos de Pedido
           const remoteTypes = await supabaseService.getOrderTypes(currentUser.id);
-          if (remoteTypes && remoteTypes.length > 0) {
+          if (remoteTypes) {
             setOrderTypes(remoteTypes);
             try {
               localStorage.setItem(`atelie_order_types_${currentUser.id}`, JSON.stringify(remoteTypes));
@@ -359,7 +367,7 @@ export default function App() {
 
           // Orçamentos
           const remoteQuotes = await supabaseService.getQuotations(currentUser.id);
-          if (remoteQuotes && remoteQuotes.length > 0) {
+          if (remoteQuotes) {
             setQuotations(remoteQuotes);
             try {
               localStorage.setItem(`atelie_quotations_${currentUser.id}`, JSON.stringify(remoteQuotes));
@@ -368,7 +376,7 @@ export default function App() {
 
           // Clientes
           const remoteClients = await supabaseService.getClients(currentUser.id);
-          if (remoteClients && remoteClients.length > 0) {
+          if (remoteClients) {
             setClients(remoteClients);
             try {
               localStorage.setItem(`atelie_clients_${currentUser.id}`, JSON.stringify(remoteClients));
@@ -379,9 +387,59 @@ export default function App() {
         }
       };
 
+      // Executa primeira sincronização imediata
       syncWithSupabase();
 
-      // Sincronização automática para Smartphones, Tablets e iPads quando a tela acende ou o app ganha foco
+      // 1. Supabase Realtime WebSockets: Notificação instantânea em menos de 100ms
+      const realtimeChannel = supabase
+        .channel(`public:realtime_${currentUser.id}_${Date.now()}`)
+        .on(
+          'postgres_changes',
+          { event: '*', schema: 'public', table: 'profiles' },
+          () => {
+            syncWithSupabase();
+          }
+        )
+        .on(
+          'postgres_changes',
+          { event: '*', schema: 'public', table: 'orders' },
+          () => {
+            syncWithSupabase();
+          }
+        )
+        .on(
+          'postgres_changes',
+          { event: '*', schema: 'public', table: 'clients' },
+          () => {
+            syncWithSupabase();
+          }
+        )
+        .on(
+          'postgres_changes',
+          { event: '*', schema: 'public', table: 'catalog' },
+          () => {
+            syncWithSupabase();
+          }
+        )
+        .on(
+          'postgres_changes',
+          { event: '*', schema: 'public', table: 'quotations' },
+          () => {
+            syncWithSupabase();
+          }
+        )
+        .subscribe();
+
+      // 2. BroadcastChannel: Sincronização entre abas do mesmo navegador
+      let broadcastChannel: BroadcastChannel | null = null;
+      try {
+        broadcastChannel = new BroadcastChannel('atelie_sync_channel');
+        broadcastChannel.onmessage = () => {
+          syncWithSupabase();
+        };
+      } catch {}
+
+      // 3. Sincronização automática para Smartphones, Tablets e iPads quando a tela acende ou o app ganha foco
       const handleSyncEvent = () => {
         if (document.visibilityState === 'visible') {
           syncWithSupabase();
@@ -392,14 +450,20 @@ export default function App() {
       window.addEventListener('online', handleSyncEvent);
       document.addEventListener('visibilitychange', handleSyncEvent);
 
-      // Polling leve a cada 30 segundos para manter todos os dispositivos sempre atualizados
-      const intervalId = setInterval(syncWithSupabase, 30000);
+      // 4. Polling rápido a cada 6 segundos para manter todos os aparelhos móveis perfeitamente sincronizados
+      const intervalId = setInterval(syncWithSupabase, 6000);
 
       return () => {
         window.removeEventListener('focus', handleSyncEvent);
         window.removeEventListener('online', handleSyncEvent);
         document.removeEventListener('visibilitychange', handleSyncEvent);
         clearInterval(intervalId);
+        if (realtimeChannel) {
+          supabase.removeChannel(realtimeChannel);
+        }
+        if (broadcastChannel) {
+          broadcastChannel.close();
+        }
       };
     }
   }, [currentUser?.id]);

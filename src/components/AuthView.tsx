@@ -84,7 +84,34 @@ export const AuthView: React.FC<AuthViewProps> = ({
     const cleanInput = loginIdentifier.trim().toLowerCase().replace(/^@/, '');
     setLoading(true);
 
-    // 1. Acesso Seguro para Administradora Master (sluccy45@gmail.com ou @sluccy45)
+    // 1. TENTA AUTENTICAÇÃO VIA API UNIVERSAL (/api/auth/login)
+    try {
+      const res = await fetch(`/api/auth/login?_t=${Date.now()}`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'Cache-Control': 'no-cache' },
+        body: JSON.stringify({ identifier: cleanInput, password: loginPassword }),
+      }).catch(() => null);
+
+      if (res && res.ok) {
+        const data = await res.json();
+        if (data.success && data.user) {
+          const loggedUser: UserAccount = data.user;
+          try {
+            localStorage.setItem('atelie_current_user_v3', JSON.stringify(loggedUser));
+            localStorage.setItem('atelie_saved_device_user_v2', JSON.stringify(loggedUser));
+          } catch {}
+
+          triggerConfetti();
+          onLoginSuccess(loggedUser);
+          setLoading(false);
+          return;
+        }
+      }
+    } catch (apiLoginErr) {
+      console.warn('Tentativa via /api/auth/login falhou, usando fallback direto:', apiLoginErr);
+    }
+
+    // 2. Acesso Seguro para Administradora Master (sluccy45@gmail.com ou @sluccy45)
     if (
       cleanInput === 'sluccy45@gmail.com' ||
       cleanInput === 'sluccy45' ||
@@ -213,7 +240,7 @@ export const AuthView: React.FC<AuthViewProps> = ({
     let targetUsername = cleanInput;
     let profileData: any = null;
 
-    // 2. BUSCA INTELIGENTE DO USUÁRIO NO SUPABASE (por e-mail ou por @username)
+    // 3. BUSCA INTELIGENTE DO USUÁRIO NO SUPABASE (por e-mail ou por @username)
     try {
       const { data } = await supabase
         .from('profiles')
@@ -244,7 +271,7 @@ export const AuthView: React.FC<AuthViewProps> = ({
       }
     }
 
-    // 3. CAMADA 1: AUTENTICAÇÃO VIA SUPABASE AUTH
+    // 4. CAMADA: AUTENTICAÇÃO VIA SUPABASE AUTH
     let isAuthSuccess = false;
     let authenticatedUser: UserAccount | null = null;
 
@@ -280,8 +307,7 @@ export const AuthView: React.FC<AuthViewProps> = ({
       console.warn('Supabase Auth signIn check:', supaErr);
     }
 
-    // 4. CAMADA 2: FALLBACK PARA USUÁRIO LOCAL / CACHE SEGURO
-    // (Útil se a confirmação de email do Supabase estiver pendente ou a rede oscilar)
+    // 5. CAMADA: FALLBACK PARA USUÁRIO LOCAL / CACHE SEGURO
     if (!isAuthSuccess) {
       const localUser = registeredUsers.find(
         (u) =>
@@ -317,9 +343,8 @@ export const AuthView: React.FC<AuthViewProps> = ({
       }
     }
 
-    // 5. LOGIN BEM-SUCEDIDO
+    // 6. LOGIN BEM-SUCEDIDO
     if (isAuthSuccess && authenticatedUser) {
-      // Persiste no LocalStorage para que o dispositivo mantenha a sessão ativa
       try {
         localStorage.setItem('atelie_current_user_v3', JSON.stringify(authenticatedUser));
         localStorage.setItem('atelie_saved_device_user_v2', JSON.stringify(authenticatedUser));
@@ -376,7 +401,43 @@ export const AuthView: React.FC<AuthViewProps> = ({
     setLoading(true);
 
     try {
-      // 1. Cria o usuário no Supabase Auth
+      // 1. Tenta criar via API Serverless Universal (/api/auth/register)
+      try {
+        const res = await fetch(`/api/auth/register?_t=${Date.now()}`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', 'Cache-Control': 'no-cache' },
+          body: JSON.stringify({
+            name: regName.trim(),
+            atelieName: regAtelieName.trim(),
+            username: cleanUsername,
+            email: cleanEmail,
+            phone: regPhone.trim(),
+            password: regPassword,
+            avatarUrl: defaultAvatar,
+          }),
+        }).catch(() => null);
+
+        if (res && res.ok) {
+          const resData = await res.json();
+          if (resData.success && resData.user) {
+            const newUser: UserAccount = resData.user;
+            try {
+              localStorage.setItem('atelie_current_user_v3', JSON.stringify(newUser));
+              localStorage.setItem('atelie_saved_device_user_v2', JSON.stringify(newUser));
+            } catch {}
+
+            onRegisterUser(newUser);
+            triggerConfetti();
+            onLoginSuccess(newUser);
+            setLoading(false);
+            return;
+          }
+        }
+      } catch (apiRegErr) {
+        console.warn('Tentativa via /api/auth/register falhou, usando fallback direto:', apiRegErr);
+      }
+
+      // 2. Fallback: Cria o usuário no Supabase Auth diretamente
       const { data: authData, error: authError } = await supabase.auth.signUp({
         email: cleanEmail,
         password: regPassword,
@@ -404,7 +465,7 @@ export const AuthView: React.FC<AuthViewProps> = ({
       const userId = authData?.user?.id || `user-${Date.now()}`;
       const trialEnds = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString();
 
-      // 2. Salva o perfil na tabela profiles do Supabase com 7 dias de trial
+      // 3. Salva o perfil na tabela profiles do Supabase com 7 dias de trial
       try {
         await supabase.from('profiles').upsert({
           id: userId,
@@ -451,13 +512,11 @@ export const AuthView: React.FC<AuthViewProps> = ({
 
       onRegisterUser(newUser);
       triggerConfetti();
-      setSuccessMsg('Conta criada com sucesso! Você ganhou 7 dias grátis de acesso. Entrando no ateliê...');
-      setTimeout(() => {
-        onLoginSuccess(newUser);
-      }, 700);
+      onLoginSuccess(newUser);
+      setLoading(false);
     } catch (err: any) {
-      setErrorMsg(err?.message || 'Erro ao criar conta.');
-    } finally {
+      console.error('Erro geral no cadastro:', err);
+      setErrorMsg('Não foi possível concluir o cadastro. Tente novamente.');
       setLoading(false);
     }
   };

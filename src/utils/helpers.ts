@@ -39,11 +39,17 @@ export function formatCurrency(value: number | string): string {
 
 export function formatDate(dateString: string): string {
   if (!dateString) return '';
-  // handles YYYY-MM-DD
-  const parts = dateString.split('-');
-  if (parts.length === 3) {
-    return `${parts[2]}/${parts[1]}/${parts[0]}`;
-  }
+  try {
+    // Se for string YYYY-MM-DD pura
+    const parts = dateString.split('-');
+    if (parts.length === 3 && !dateString.includes('T')) {
+      return `${parts[2]}/${parts[1]}/${parts[0]}`;
+    }
+    const d = new Date(dateString);
+    if (!isNaN(d.getTime())) {
+      return d.toLocaleDateString('pt-BR');
+    }
+  } catch {}
   return dateString;
 }
 

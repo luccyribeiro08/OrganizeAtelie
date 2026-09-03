@@ -24,6 +24,7 @@ import {
 import { AtelieProfile, MercadoPagoLinks, SubscriptionPlan, SubscriptionStatus } from '../types';
 import { supabaseService } from '../services/supabaseService';
 import { formatDate } from '../utils/helpers';
+import { getSubscriptionInfo } from '../utils/subscriptionUtils';
 
 interface AdminUsersViewProps {
   currentAdminProfile: AtelieProfile;
@@ -380,40 +381,8 @@ export const AdminUsersView: React.FC<AdminUsersViewProps> = ({
                 </tr>
               ) : (
                 filteredUsers.map((u) => {
-                  const now = new Date();
-                  const isUserAdmin = Boolean(
-                    u.isAdmin ||
-                    (u.email && u.email.trim().toLowerCase() === 'sluccy45@gmail.com') ||
-                    u.username === 'sluccy45' ||
-                    u.id === 'user-sluccy45-master'
-                  );
-                  const isPaid = u.subscriptionStatus === 'active' || u.subscriptionPlan === 'vitalicio';
-                  let statusBadge = (
-                    <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-pink-100 text-[#ac2471]">
-                      🎁 Teste 7d
-                    </span>
-                  );
-
-                  if (isUserAdmin) {
-                    statusBadge = (
-                      <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-purple-100 text-purple-800 border border-purple-200">
-                        👑 Admin Master
-                      </span>
-                    );
-                  } else if (isPaid) {
-                    statusBadge = (
-                      <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-100 text-emerald-800">
-                        💎 Ativa ({u.subscriptionPlan})
-                      </span>
-                    );
-                  } else if (u.trialEndsAt && new Date(u.trialEndsAt) < now) {
-                    statusBadge = (
-                      <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-rose-100 text-rose-800">
-                        🔒 Teste Expirado
-                      </span>
-                    );
-                  }
-
+                  const subInfo = getSubscriptionInfo(u);
+                  const isUserAdmin = subInfo.isAdmin;
                   const isCurrentActionLoading = actionLoadingId === u.id;
 
                   return (
@@ -447,24 +416,25 @@ export const AdminUsersView: React.FC<AdminUsersViewProps> = ({
                       {/* Status & Expiration */}
                       <td className="py-3.5 px-4">
                         <div className="space-y-1">
-                          {statusBadge}
-                          {isUserAdmin ? (
+                          <span className={`inline-block px-2 py-0.5 rounded-full text-[10px] font-bold border ${subInfo.statusBadgeClass}`}>
+                            {subInfo.statusBadgeText}
+                          </span>
+                          {subInfo.isAdmin ? (
                             <span className="text-[10px] text-purple-700 font-medium block">
                               Acesso Vitalício Permanente
                             </span>
+                          ) : subInfo.isActivePaid ? (
+                            <span className="text-[10px] text-slate-500 block">
+                              Válido até: {subInfo.expiresFormatted}
+                            </span>
+                          ) : subInfo.isTrial && !subInfo.isTrialExpired ? (
+                            <span className="text-[10px] text-slate-500 block">
+                              Fim teste: {subInfo.expiresFormatted}
+                            </span>
                           ) : (
-                            <>
-                              {u.subscriptionExpiresAt && (
-                                <span className="text-[10px] text-slate-400 block">
-                                  Válido até: {new Date(u.subscriptionExpiresAt).toLocaleDateString('pt-BR')}
-                                </span>
-                              )}
-                              {!isPaid && u.trialEndsAt && (
-                                <span className="text-[10px] text-slate-400 block">
-                                  Fim teste: {new Date(u.trialEndsAt).toLocaleDateString('pt-BR')}
-                                </span>
-                              )}
-                            </>
+                            <span className="text-[10px] text-rose-600 font-bold block">
+                              🔒 Expirado em {subInfo.expiresFormatted}
+                            </span>
                           )}
                         </div>
                       </td>

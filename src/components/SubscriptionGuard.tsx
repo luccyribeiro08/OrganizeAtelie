@@ -2,6 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { Sparkles, Lock, Loader2, ArrowRight } from 'lucide-react';
 import { AtelieProfile } from '../types';
 import { supabase } from '../lib/supabaseClient';
+import { getSubscriptionInfo } from '../utils/subscriptionUtils';
 
 interface SubscriptionGuardProps {
   profile: AtelieProfile | null;
@@ -54,6 +55,7 @@ export const SubscriptionGuard: React.FC<SubscriptionGuardProps> = ({
             subscriptionPlan: data.subscription_plan || 'free_trial',
             subscriptionExpiresAt: data.subscription_expires_at,
             trialEndsAt: data.trial_ends_at,
+            createdAt: data.created_at || prev?.createdAt,
             phone: data.phone || prev?.phone || '',
             pixKey: data.pix_key || prev?.pixKey || '',
             instagram: data.instagram || prev?.instagram || '',
@@ -102,52 +104,14 @@ export const SubscriptionGuard: React.FC<SubscriptionGuardProps> = ({
     );
   }
 
-  // 2. Se is_admin === true, renderize os children (liberado)
-  const isTargetAdminEmail = Boolean(
-    currentProfile?.email &&
-      currentProfile.email.trim().toLowerCase() === 'sluccy45@gmail.com'
-  );
-  if (currentProfile?.isAdmin || isTargetAdminEmail) {
+  // 2. Validação unificada via getSubscriptionInfo (Fonte Única de Verdade)
+  const subInfo = getSubscriptionInfo(currentProfile);
+
+  if (subInfo.canPerformAction) {
     return <>{children}</>;
   }
 
-  const now = new Date();
-
-  // 3. Se subscription_status === 'active', renderize os children (liberado)
-  if (currentProfile?.subscriptionStatus === 'active') {
-    // Se tiver data de expiração, valida se ainda não expirou
-    if (currentProfile.subscriptionExpiresAt) {
-      const expiresAt = new Date(currentProfile.subscriptionExpiresAt);
-      if (now <= expiresAt) {
-        return <>{children}</>;
-      }
-    } else {
-      // Plano vitalício ou sem expiração explícita
-      return <>{children}</>;
-    }
-  }
-
-  // 4. Se subscription_status === 'trial', verifique se new Date() < new Date(trial_ends_at). Se sim, renderize os children.
-  if (
-    currentProfile?.subscriptionStatus === 'trial' ||
-    !currentProfile?.subscriptionStatus ||
-    currentProfile?.subscriptionPlan === 'free_trial'
-  ) {
-    let trialEnd: Date | null = null;
-    if (currentProfile?.trialEndsAt) {
-      trialEnd = new Date(currentProfile.trialEndsAt);
-    } else if (currentProfile?.createdAt) {
-      trialEnd = new Date(
-        new Date(currentProfile.createdAt).getTime() + 7 * 24 * 60 * 60 * 1000
-      );
-    }
-
-    if (trialEnd && now < trialEnd) {
-      return <>{children}</>;
-    }
-  }
-
-  // 5. Se falhar em todas as regras: Redireciona para /assinatura ou exibe Fallback Bloqueado
+  // 3. Se não puder realizar ações: Exibe Fallback ou Card de Acesso Restrito
   if (fallback) {
     return <>{fallback}</>;
   }

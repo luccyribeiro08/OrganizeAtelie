@@ -1,5 +1,5 @@
 // ============================================================
-// 🎀 ORGANIZE ATELIÊ - VERCEL SERVERLESS API: ATIVAÇÃO COM CONSUMO ÚNICO DE TRANSAÇÃO DO MERCADO PAGO
+// 🎀 ORGANIZE ATELIÊ - VERCEL SERVERLESS API: VALIDAÇÃO ESTRITA E BLINDADA DE PAGAMENTOS
 // Endpoint: POST /api/subscription/verify-payment
 // ============================================================
 
@@ -81,7 +81,7 @@ export default async function handler(req: any, res: any) {
       });
     }
 
-    // Se a assinatura já foi ativada previamente para este usuário e está no prazo
+    // Se a assinatura já foi ativada e está válida para ESTA conta
     if (profile && profile.subscription_status === 'active' && profile.subscription_plan !== 'free_trial') {
       const now = new Date();
       const expiresAt = profile.subscription_expires_at ? new Date(profile.subscription_expires_at) : null;
@@ -97,7 +97,7 @@ export default async function handler(req: any, res: any) {
       }
     }
 
-    // 2. CONSULTA AVANÇADA NO MERCADO PAGO COM CONTROLE DE CONSUMO ÚNICO
+    // 2. CONSULTA RIGOROSA E EXCLUSIVA NO MERCADO PAGO
     let verifiedViaMp = false;
     let detectedPlan = plan || 'mensal';
     let matchedPayment: any = null;
@@ -107,10 +107,32 @@ export default async function handler(req: any, res: any) {
       mpDiagnostic = 'Token do Mercado Pago não configurado na Vercel.';
     } else {
       try {
-        // A) Se tiver ID específico do comprovante informado pelo usuário
+        // Obter todas as transações já consumidas por outros usuários no Supabase para impedir reuso
+        const { data: allProfiles } = await supabaseAdmin
+          .from('profiles')
+          .select('id, email, mercado_pago_links');
+
+        const claimedPaymentMap = new Map<string, string>(); // paymentId -> userId
+        (allProfiles || []).forEach((p: any) => {
+          const pLinks = p.mercado_pago_links || {};
+          if (pLinks.claimed_payment_id) {
+            claimedPaymentMap.set(String(pLinks.claimed_payment_id), String(p.id));
+          }
+        });
+
+        // A) Validação por ID específico do comprovante informado pelo cliente
         if (paymentId) {
           const cleanPid = String(paymentId).replace(/\D/g, '').trim();
           if (cleanPid) {
+            const alreadyClaimedBy = claimedPaymentMap.get(cleanPid);
+            if (alreadyClaimedBy && alreadyClaimedBy !== profile?.id) {
+              return res.status(200).json({
+                verified: false,
+                status: profile?.subscription_status || 'trial',
+                message: `O comprovante de pagamento #${cleanPid} já foi utilizado para ativar outra conta do Organize Ateliê.`,
+              });
+            }
+
             const pRes = await fetch(`https://api.mercadopago.com/v1/payments/${cleanPid}`, {
               headers: { Authorization: `Bearer ${rawMpToken}` },
             });
@@ -120,15 +142,15 @@ export default async function handler(req: any, res: any) {
                 verifiedViaMp = true;
                 matchedPayment = pData;
               } else {
-                mpDiagnostic = `Pagamento #${cleanPid} encontrado no Mercado Pago, mas o status é '${pData.status}'.`;
+                mpDiagnostic = `Pagamento #${cleanPid} localizado no Mercado Pago, mas o status é '${pData.status}'.`;
               }
             } else {
-              mpDiagnostic = `Pagamento #${cleanPid} não localizado no Mercado Pago (HTTP ${pRes.status}).`;
+              mpDiagnostic = `Comprovante #${cleanPid} não localizado no Mercado Pago. Verifique o número digitado.`;
             }
           }
         }
 
-        // B) Busca por e-mail do pagador
+        // B) Validação estrita por e-mail do pagador (se não foi informado paymentId)
         if (!verifiedViaMp && cleanEmail) {
           const searchUrl = `https://api.mercadopago.com/v1/payments/search?sort=date_created&criteria=desc&limit=15&payer.email=${encodeURIComponent(cleanEmail)}`;
           const mpRes = await fetch(searchUrl, {
@@ -137,15 +159,24 @@ export default async function handler(req: any, res: any) {
           if (mpRes.ok) {
             const searchData = await mpRes.json();
             const results = searchData.results || [];
-            const approved = results.find((p: any) => p.status === 'approved' || p.status === 'authorized');
-            if (approved) {
+            
+            // Procura pagamentos aprovados deste e-mail que não tenham sido consumidos por outro usuário
+            const approvedForEmail = results.find((p: any) => {
+              const isApproved = p.status === 'approved' || p.status === 'authorized';
+              if (!isApproved) return false;
+              const claimedBy = claimedPaymentMap.get(String(p.id));
+              if (claimedBy && claimedBy !== profile?.id) return false;
+              return true;
+            });
+
+            if (approvedForEmail) {
               verifiedViaMp = true;
-              matchedPayment = approved;
+              matchedPayment = approvedForEmail;
             }
           }
         }
 
-        // C) Busca por external_reference (ID do usuário)
+        // C) Validação estrita por external_reference (ID do usuário)
         if (!verifiedViaMp && cleanUserId) {
           const searchUrl = `https://api.mercadopago.com/v1/payments/search?sort=date_created&criteria=desc&limit=15&external_reference=${encodeURIComponent(cleanUserId)}`;
           const mpRes = await fetch(searchUrl, {
@@ -154,58 +185,17 @@ export default async function handler(req: any, res: any) {
           if (mpRes.ok) {
             const searchData = await mpRes.json();
             const results = searchData.results || [];
-            const approved = results.find((p: any) => p.status === 'approved' || p.status === 'authorized');
-            if (approved) {
-              verifiedViaMp = true;
-              matchedPayment = approved;
-            }
-          }
-        }
-
-        // D) Busca por Pagamento Recente Aprovado com Consumo Único (Não Reutilizável)
-        if (!verifiedViaMp) {
-          const recentUrl = `https://api.mercadopago.com/v1/payments/search?sort=date_created&criteria=desc&limit=25`;
-          const recentRes = await fetch(recentUrl, {
-            headers: { Authorization: `Bearer ${rawMpToken}` },
-          });
-          if (recentRes.ok) {
-            const recentData = await recentRes.json();
-            const results = recentData.results || [];
-
-            // Obtém todos os IDs de pagamentos já vinculados a outras contas no Supabase
-            const { data: allProfiles } = await supabaseAdmin
-              .from('profiles')
-              .select('id, mercado_pago_links');
-
-            const claimedPaymentIds = new Set<string>();
-            (allProfiles || []).forEach((p: any) => {
-              const pLinks = p.mercado_pago_links || {};
-              if (pLinks.claimed_payment_id) {
-                claimedPaymentIds.add(String(pLinks.claimed_payment_id));
-              }
-            });
-
-            // Encontra a transação mais recente aprovada que ainda NÃO foi consumida por ninguém
-            const oneDayAgo = new Date(Date.now() - 24 * 60 * 60 * 1000);
-            const unclaimedPayment = results.find((p: any) => {
+            const approvedForUser = results.find((p: any) => {
               const isApproved = p.status === 'approved' || p.status === 'authorized';
               if (!isApproved) return false;
-              const amt = Number(p.transaction_amount || 0);
-              if (amt < 5) return false;
-              if (claimedPaymentIds.has(String(p.id))) return false; // Já usado por outro usuário
-
-              const dateStr = p.date_approved || p.date_created;
-              if (dateStr) {
-                const pDate = new Date(dateStr);
-                if (pDate < oneDayAgo) return false;
-              }
+              const claimedBy = claimedPaymentMap.get(String(p.id));
+              if (claimedBy && claimedBy !== profile?.id) return false;
               return true;
             });
 
-            if (unclaimedPayment) {
+            if (approvedForUser) {
               verifiedViaMp = true;
-              matchedPayment = unclaimedPayment;
-              console.log('[VerifyPayment API] Transação inédita e aprovada associada à conta:', unclaimedPayment.id);
+              matchedPayment = approvedForUser;
             }
           }
         }
@@ -225,11 +215,11 @@ export default async function handler(req: any, res: any) {
         }
       } catch (mpErr: any) {
         console.warn('[VerifyPayment API] Erro ao consultar API do Mercado Pago:', mpErr);
-        mpDiagnostic = `Erro ao conectar com API do Mercado Pago: ${mpErr?.message || String(mpErr)}`;
+        mpDiagnostic = `Erro ao consultar Mercado Pago: ${mpErr?.message || String(mpErr)}`;
       }
     }
 
-    // 3. SE O PAGAMENTO FOI COMPROVADO -> ATIVAÇÃO E VINCULAÇÃO ÚNICA DA TRANSAÇÃO
+    // 3. SE O PAGAMENTO FOI EFETIVAMENTE COMPROVADO PARA ESTA CONTA -> ATIVAÇÃO
     if (verifiedViaMp && matchedPayment) {
       const daysToAdd = detectedPlan === 'anual' ? 365 : detectedPlan === 'trimestral' ? 90 : 30;
       const newExpiry = new Date();
@@ -242,6 +232,7 @@ export default async function handler(req: any, res: any) {
         claimed_payment_id: String(matchedPayment.id),
         claimed_at: new Date().toISOString(),
         payment_amount: matchedPayment.transaction_amount,
+        payer_email: matchedPayment.payer?.email || '',
       };
 
       const { data: updatedProfile, error: updateErr } = await supabaseAdmin
@@ -280,11 +271,14 @@ export default async function handler(req: any, res: any) {
       });
     }
 
-    // 4. SE NÃO HOUVER PAGAMENTO APROVADO VÁLIDO
+    // 4. SE NÃO HOUVER PAGAMENTO VÁLIDO PARA ESTA CONTA -> RECUSA A ATIVAÇÃO
+    const userEmailDisplay = cleanEmail || 'sua conta';
     return res.status(200).json({
       verified: false,
       status: profile?.subscription_status || 'trial',
-      message: mpDiagnostic || 'Nenhum pagamento aprovado foi localizado no Mercado Pago para esta conta. Se você realizou o pagamento com outro e-mail, digite o Nº do Pagamento do comprovante para validar.',
+      message:
+        mpDiagnostic ||
+        `Nenhum pagamento aprovado foi localizado no Mercado Pago para o e-mail ${userEmailDisplay}. Se você realizou o pagamento com outro e-mail, digite o Nº do Pagamento do comprovante para validar.`,
       tokenConfigured: Boolean(rawMpToken),
     });
   } catch (err: any) {

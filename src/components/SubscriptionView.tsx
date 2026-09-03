@@ -333,26 +333,47 @@ export const SubscriptionView: React.FC<SubscriptionViewProps> = ({
         {/* NOTIFICAÇÃO DINÂMICA */}
         {notification && (
           <div
-            className={`p-4 rounded-2xl text-xs font-semibold flex items-center gap-3 animate-in fade-in ${
+            className={`p-4 rounded-2xl text-xs font-semibold space-y-3 animate-in fade-in ${
               notification.type === 'success'
                 ? 'bg-emerald-100 text-emerald-800 border border-emerald-200'
                 : notification.type === 'error'
-                ? 'bg-rose-100 text-rose-800 border border-rose-200'
+                ? 'bg-rose-50 text-rose-800 border-2 border-rose-200'
                 : 'bg-blue-100 text-blue-800 border border-blue-200'
             }`}
           >
-            {notification.type === 'success' ? (
-              <CheckCircle2 className="w-4 h-4 flex-shrink-0" />
-            ) : (
-              <AlertCircle className="w-4 h-4 flex-shrink-0" />
+            <div className="flex items-center gap-3">
+              {notification.type === 'success' ? (
+                <CheckCircle2 className="w-5 h-5 flex-shrink-0 text-emerald-600" />
+              ) : (
+                <AlertCircle className="w-5 h-5 flex-shrink-0 text-rose-600" />
+              )}
+              <span className="flex-1">{notification.message}</span>
+              <button
+                onClick={() => setNotification(null)}
+                className="text-xs opacity-70 hover:opacity-100 cursor-pointer"
+              >
+                ✕
+              </button>
+            </div>
+
+            {notification.type === 'error' && (
+              <div className="pt-2 border-t border-rose-200/70 flex flex-col sm:flex-row items-center justify-between gap-2">
+                <span className="text-[11px] text-rose-700">
+                  Pagou com outro e-mail ou PIX? Envie seu comprovante para a Luccy liberar na hora:
+                </span>
+                <a
+                  href={`https://wa.me/55${(supportPhone || '21973389309').replace(/\D/g, '')}?text=${encodeURIComponent(
+                    `Olá, Luccy! Realizei o pagamento da assinatura do Organize Ateliê.\n\n*Dados da Conta:*\n- Ateliê: ${profile?.name || 'Meu Ateliê'}\n- Artesã: ${profile?.ownerName || profile?.name || 'Artesã'}\n- E-mail da Conta: ${profile?.email || ''}\n- Plano: ${selectedPeriod === 'anual' ? 'Plano Anual' : selectedPeriod === 'trimestral' ? 'Plano Trimestral' : 'Plano Mensal'}\n\nEstou enviando o comprovante em anexo para liberação do meu acesso!`
+                  )}`}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="w-full sm:w-auto px-4 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs flex items-center justify-center gap-1.5 shadow-sm transition-colors cursor-pointer whitespace-nowrap"
+                >
+                  <MessageCircle className="w-4 h-4" />
+                  <span>Enviar Comprovante no WhatsApp</span>
+                </a>
+              </div>
             )}
-            <span className="flex-1">{notification.message}</span>
-            <button
-              onClick={() => setNotification(null)}
-              className="text-xs opacity-70 hover:opacity-100 cursor-pointer"
-            >
-              ✕
-            </button>
           </div>
         )}
 

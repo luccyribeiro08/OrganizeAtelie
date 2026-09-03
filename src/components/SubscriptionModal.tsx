@@ -518,18 +518,39 @@ export const SubscriptionModal: React.FC<SubscriptionModalProps> = ({
           {/* Mensagem de Feedback de Verificação */}
           {verificationMessage && (
             <div
-              className={`p-3 rounded-xl text-xs font-medium border flex items-start gap-2 animate-in fade-in ${
+              className={`p-3.5 rounded-xl text-xs font-medium border space-y-2 animate-in fade-in ${
                 verificationMessage.type === 'error'
                   ? 'bg-rose-50 border-rose-200 text-rose-800'
                   : 'bg-emerald-100 border-emerald-300 text-emerald-900'
               }`}
             >
-              {verificationMessage.type === 'error' ? (
-                <HelpCircle className="w-4 h-4 text-rose-600 flex-shrink-0 mt-0.5" />
-              ) : (
-                <CheckCircle2 className="w-4 h-4 text-emerald-700 flex-shrink-0 mt-0.5" />
+              <div className="flex items-start gap-2">
+                {verificationMessage.type === 'error' ? (
+                  <HelpCircle className="w-4 h-4 text-rose-600 flex-shrink-0 mt-0.5" />
+                ) : (
+                  <CheckCircle2 className="w-4 h-4 text-emerald-700 flex-shrink-0 mt-0.5" />
+                )}
+                <span className="flex-1">{verificationMessage.text}</span>
+              </div>
+
+              {verificationMessage.type === 'error' && (
+                <div className="pt-2 border-t border-rose-200/70 flex flex-col sm:flex-row items-center justify-between gap-2">
+                  <span className="text-[11px] text-rose-700">
+                    Pagou com outro e-mail ou PIX? Envie seu comprovante para liberação imediata:
+                  </span>
+                  <a
+                    href={`https://wa.me/55${(mpLinks.whatsappAdmin || '21973389309').replace(/\D/g, '')}?text=${encodeURIComponent(
+                      `Olá, Luccy! Realizei o pagamento da assinatura do Organize Ateliê.\n\n*Dados da Conta:*\n- Ateliê: ${profile?.name || 'Meu Ateliê'}\n- Artesã: ${profile?.ownerName || profile?.name || 'Artesã'}\n- E-mail da Conta: ${profile?.email || ''}\n- Plano: ${selectedPlan === 'anual' ? 'Plano Anual' : selectedPlan === 'trimestral' ? 'Plano Trimestral' : 'Plano Mensal'}\n\nEstou enviando o comprovante em anexo para liberação do meu acesso!`
+                    )}`}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="w-full sm:w-auto px-3.5 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs flex items-center justify-center gap-1.5 shadow-sm transition-colors cursor-pointer whitespace-nowrap"
+                  >
+                    <MessageCircle className="w-3.5 h-3.5" />
+                    <span>Enviar Comprovante no WhatsApp</span>
+                  </a>
+                </div>
               )}
-              <span className="flex-1">{verificationMessage.text}</span>
             </div>
           )}
 
@@ -540,7 +561,7 @@ export const SubscriptionModal: React.FC<SubscriptionModalProps> = ({
               onClick={() => setShowIdInput(!showIdInput)}
               className="text-[11px] text-emerald-800 hover:underline font-semibold cursor-pointer"
             >
-              {showIdInput ? 'Ocultar busca por Nº do Comprovante' : 'Pagou com outro e-mail? Digite o Nº do Pagamento'}
+              {showIdInput ? 'Ocultar busca por Nº do Comprovante' : 'Prefere validar pelo Nº do Pagamento? Clique aqui'}
             </button>
 
             {showIdInput && (

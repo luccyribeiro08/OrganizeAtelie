@@ -129,7 +129,7 @@ export const SubscriptionGuard: React.FC<SubscriptionGuardProps> = ({
           </div>
 
           <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-extrabold bg-rose-100 text-rose-800 border border-rose-200 mb-3">
-            <span>🔒</span> Período de Teste Encerrado
+            <span>🔒</span> {subInfo.isPaidExpired ? 'Assinatura Vencida' : 'Período de Teste Encerrado'}
           </span>
 
           <h2 className="text-2xl sm:text-3xl font-extrabold text-slate-800 mb-3">
@@ -137,7 +137,15 @@ export const SubscriptionGuard: React.FC<SubscriptionGuardProps> = ({
           </h2>
 
           <p className="text-sm text-slate-600 leading-relaxed mb-6 max-w-lg mx-auto">
-            Seus <strong>7 dias de teste gratuito</strong> chegaram ao fim. Para continuar cadastrando pedidos, gerando orçamentos em PDF e usando todos os recursos, ative seu plano mensal.
+            {subInfo.isPaidExpired ? (
+              <>
+                Sua assinatura do plano Organize Ateliê expirou em <strong>{subInfo.expiresFormatted}</strong>. Para continuar cadastrando pedidos, gerando orçamentos e gerenciando seu ateliê, renove seu plano abaixo.
+              </>
+            ) : (
+              <>
+                Seus <strong>7 dias de teste gratuito</strong> chegaram ao fim. Para continuar cadastrando pedidos, gerando orçamentos em PDF e usando todos os recursos, escolha e ative um de nossos planos.
+              </>
+            )}
           </p>
 
           <div className="flex flex-col sm:flex-row items-center justify-center gap-3">

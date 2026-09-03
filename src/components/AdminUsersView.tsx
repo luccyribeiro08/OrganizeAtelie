@@ -107,6 +107,9 @@ export const AdminUsersView: React.FC<AdminUsersViewProps> = ({
 
     if (plan === 'vitalicio' || status === 'admin') {
       expiresAt = null;
+    } else if (plan === 'free_trial' || status === 'trial') {
+      trialEndsAt = new Date(now.getTime() + (daysToAdd || 7) * 24 * 60 * 60 * 1000).toISOString();
+      expiresAt = null; // Limpa explicitamente data de assinatura paga
     } else if (daysToAdd !== null) {
       // Calculate from current expiration if already active, or from now
       const baseDate =
@@ -114,9 +117,6 @@ export const AdminUsersView: React.FC<AdminUsersViewProps> = ({
           ? new Date(targetUser.subscriptionExpiresAt)
           : now;
       expiresAt = new Date(baseDate.getTime() + daysToAdd * 24 * 60 * 60 * 1000).toISOString();
-    } else if (plan === 'free_trial') {
-      trialEndsAt = new Date(now.getTime() + 7 * 24 * 60 * 60 * 1000).toISOString();
-      expiresAt = null;
     }
 
     const success = await supabaseService.updateUserSubscriptionAdmin(targetUser.id, {

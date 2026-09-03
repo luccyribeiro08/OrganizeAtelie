@@ -58,15 +58,12 @@ export function getSubscriptionInfo(profile: AtelieProfile | null): Subscription
 
   const now = new Date();
 
-  // 2. Active Paid Subscription Check
-  const isPaidPlan =
-    profile.subscriptionStatus === 'active' ||
-    profile.subscriptionPlan === 'mensal' ||
-    profile.subscriptionPlan === 'trimestral' ||
-    profile.subscriptionPlan === 'anual' ||
-    profile.subscriptionPlan === 'vitalicio';
+  // 2. Active Paid Subscription Check (Apenas para status 'active' e planos pagos reais)
+  const isPaidActive =
+    profile.subscriptionStatus === 'active' &&
+    profile.subscriptionPlan !== 'free_trial';
 
-  if (isPaidPlan) {
+  if (isPaidActive) {
     if (profile.subscriptionPlan === 'vitalicio') {
       return {
         isAdmin: false,

@@ -444,6 +444,41 @@ export const supabaseService = {
   // --- ADMIN METHODS ---
   async getAllUsersForAdmin(): Promise<AtelieProfile[]> {
     const userMap = new Map<string, AtelieProfile>();
+    const emailMap = new Set<string>();
+
+    const addProfile = (d: any) => {
+      if (!d || !d.id) return;
+      const cleanEmail = d.email ? String(d.email).trim().toLowerCase() : '';
+      if (cleanEmail && emailMap.has(cleanEmail)) {
+        return; // Evita duplicações por e-mail
+      }
+      if (cleanEmail) {
+        emailMap.add(cleanEmail);
+      }
+
+      userMap.set(d.id, {
+        id: d.id,
+        name: d.atelie_name || d.name || 'Meu Ateliê',
+        ownerName: d.name || d.owner_name || 'Artesã',
+        role: d.role || 'Artesã Responsável',
+        slogan: d.slogan || '',
+        phone: d.phone || '',
+        pixKey: d.pix_key || '',
+        instagram: d.instagram || '',
+        username: d.username || '',
+        email: d.email || '',
+        address: d.address || '',
+        logoUrl: d.logo_url || '',
+        avatarUrl: d.avatar_url || '',
+        trialEndsAt: d.trial_ends_at,
+        subscriptionStatus: d.subscription_status || 'trial',
+        subscriptionPlan: d.subscription_plan || 'free_trial',
+        subscriptionExpiresAt: d.subscription_expires_at,
+        isAdmin: Boolean(d.is_admin) || d.email?.toLowerCase() === 'sluccy45@gmail.com',
+        mercadoPagoLinks: d.mercado_pago_links || {},
+        createdAt: d.created_at || new Date().toISOString(),
+      });
+    };
 
     // 1. Tenta carregar através da API Serverless Admin (que roda com permissões totais via Service Role)
     try {
@@ -455,39 +490,14 @@ export const supabaseService = {
       if (res && res.ok) {
         const json = await res.json();
         if (json.success && Array.isArray(json.users)) {
-          json.users.forEach((d: any) => {
-            if (d && d.id) {
-              userMap.set(d.id, {
-                id: d.id,
-                name: d.atelie_name || d.name,
-                ownerName: d.name,
-                role: d.role || 'Artesã Responsável',
-                slogan: d.slogan || '',
-                phone: d.phone || '',
-                pixKey: d.pix_key || '',
-                instagram: d.instagram || '',
-                username: d.username || '',
-                email: d.email || '',
-                address: d.address || '',
-                logoUrl: d.logo_url || '',
-                avatarUrl: d.avatar_url || '',
-                trialEndsAt: d.trial_ends_at,
-                subscriptionStatus: d.subscription_status || 'trial',
-                subscriptionPlan: d.subscription_plan || 'free_trial',
-                subscriptionExpiresAt: d.subscription_expires_at,
-                isAdmin: Boolean(d.is_admin) || d.email === 'sluccy45@gmail.com',
-                mercadoPagoLinks: d.mercado_pago_links || {},
-                createdAt: d.created_at || new Date().toISOString(),
-              });
-            }
-          });
+          json.users.forEach((d: any) => addProfile(d));
         }
       }
     } catch (apiErr) {
       console.warn('Falha na API /api/admin/users, tentando Supabase direto:', apiErr);
     }
 
-    // 2. Consulta direta no Supabase (fallback)
+    // 2. Consulta direta no Supabase (se a API falhar)
     if (userMap.size === 0) {
       try {
         const { data, error } = await supabase
@@ -496,79 +506,17 @@ export const supabaseService = {
           .order('created_at', { ascending: false });
 
         if (!error && Array.isArray(data)) {
-          data.forEach((d: any) => {
-            if (d && d.id) {
-              userMap.set(d.id, {
-                id: d.id,
-                name: d.atelie_name || d.name,
-                ownerName: d.name,
-                role: d.role || 'Artesã Responsável',
-                slogan: d.slogan || '',
-                phone: d.phone || '',
-                pixKey: d.pix_key || '',
-                instagram: d.instagram || '',
-                username: d.username || '',
-                email: d.email || '',
-                address: d.address || '',
-                logoUrl: d.logo_url || '',
-                avatarUrl: d.avatar_url || '',
-                trialEndsAt: d.trial_ends_at,
-                subscriptionStatus: d.subscription_status || 'trial',
-                subscriptionPlan: d.subscription_plan || 'free_trial',
-                subscriptionExpiresAt: d.subscription_expires_at,
-                isAdmin: Boolean(d.is_admin) || d.email === 'sluccy45@gmail.com',
-                mercadoPagoLinks: d.mercado_pago_links || {},
-                createdAt: d.created_at || new Date().toISOString(),
-              });
-            }
-          });
+          data.forEach((d: any) => addProfile(d));
         }
       } catch (e) {
         console.warn('Erro ao buscar perfis no Supabase:', e);
       }
     }
 
-    // 3. Mescla com usuários registrados localmente (localStorage)
+    // Limpa chave obsoleta de mock local do navegador para evitar poluição
     try {
-      const localStr = localStorage.getItem('atelie_users_db_v2');
-      if (localStr) {
-        const localList = JSON.parse(localStr);
-        if (Array.isArray(localList)) {
-          localList.forEach((u: any) => {
-            if (u && (u.id || u.email)) {
-              const key = u.id || u.email;
-              const existing = userMap.get(key);
-              if (!existing) {
-                userMap.set(key, {
-                  id: u.id || `user-${Date.now()}`,
-                  name: u.atelieName || u.name || 'Meu Ateliê',
-                  ownerName: u.name || 'Artesã',
-                  role: u.role || 'Artesã Responsável',
-                  slogan: u.slogan || '',
-                  phone: u.phone || '',
-                  pixKey: u.email || '',
-                  instagram: u.instagram || '',
-                  username: u.username || '',
-                  email: u.email || '',
-                  address: '',
-                  logoUrl: u.logoUrl || u.avatarUrl || '',
-                  avatarUrl: u.avatarUrl || u.logoUrl || '',
-                  trialEndsAt: u.trialEndsAt || new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString(),
-                  subscriptionStatus: u.subscriptionStatus || 'trial',
-                  subscriptionPlan: u.subscriptionPlan || 'free_trial',
-                  subscriptionExpiresAt: u.subscriptionExpiresAt,
-                  isAdmin: u.isAdmin || u.email === 'sluccy45@gmail.com',
-                  mercadoPagoLinks: u.mercadoPagoLinks || {},
-                  createdAt: u.createdAt || new Date().toISOString(),
-                });
-              }
-            }
-          });
-        }
-      }
-    } catch (e) {
-      console.warn('Erro ao ler usuários locais:', e);
-    }
+      localStorage.removeItem('atelie_users_db_v2');
+    } catch {}
 
     return Array.from(userMap.values());
   },

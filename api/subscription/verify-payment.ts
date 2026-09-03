@@ -1,5 +1,5 @@
 // ============================================================
-// 🎀 ORGANIZE ATELIÊ - VERCEL SERVERLESS API: VERIFICAÇÃO REAL E INTELIGENTE DE PAGAMENTO
+// 🎀 ORGANIZE ATELIÊ - VERCEL SERVERLESS API: VERIFICAÇÃO E DIAGNÓSTICO DO MERCADO PAGO
 // Endpoint: POST /api/subscription/verify-payment
 // ============================================================
 
@@ -20,20 +20,25 @@ export default async function handler(req: any, res: any) {
   }
 
   try {
-    const supabaseUrl =
+    const supabaseUrl = (
       process.env.SUPABASE_URL ||
       process.env.VITE_SUPABASE_URL ||
-      '';
-    const supabaseServiceRoleKey =
+      ''
+    ).trim();
+
+    const supabaseServiceRoleKey = (
       process.env.SUPABASE_SERVICE_ROLE_KEY ||
       process.env.SUPABASE_SERVICE_ROLE ||
       process.env.VITE_SUPABASE_ANON_KEY ||
       process.env.SUPABASE_ANON_KEY ||
-      '';
-    const mpAccessToken =
+      ''
+    ).trim();
+
+    const rawMpToken = (
       process.env.MERCADO_PAGO_ACCESS_TOKEN ||
       process.env.MP_ACCESS_TOKEN ||
-      '';
+      ''
+    ).trim().replace(/^['"]|['"]$/g, '');
 
     if (!supabaseUrl || !supabaseServiceRoleKey) {
       return res.status(500).json({ success: false, error: 'Configuração do Supabase ausente no servidor.' });
@@ -92,66 +97,65 @@ export default async function handler(req: any, res: any) {
       }
     }
 
-    // 2. CONSULTA AVANÇADA NA API DO MERCADO PAGO
+    // 2. CONSULTA NA API DO MERCADO PAGO
     let verifiedViaMp = false;
     let detectedPlan = plan || 'mensal';
     let matchedPayment: any = null;
-    let searchDebugInfo = {
-      mpTokenConfigured: Boolean(mpAccessToken),
-      queriedMethods: [] as string[],
-      totalResultsFound: 0,
-    };
+    let mpDiagnostic = '';
 
-    if (mpAccessToken) {
+    if (!rawMpToken) {
+      mpDiagnostic = 'Token do Mercado Pago não configurado na Vercel.';
+    } else {
       try {
         // A) Se tiver ID específico do pagamento informado pelo comprovante
         if (paymentId) {
-          searchDebugInfo.queriedMethods.push(`paymentId:${paymentId}`);
           const cleanPid = String(paymentId).replace(/\D/g, '').trim();
           if (cleanPid) {
             const pRes = await fetch(`https://api.mercadopago.com/v1/payments/${cleanPid}`, {
-              headers: { Authorization: `Bearer ${mpAccessToken}` },
+              headers: { Authorization: `Bearer ${rawMpToken}` },
             });
             if (pRes.ok) {
               const pData = await pRes.json();
               if (pData.status === 'approved' || pData.status === 'authorized') {
                 verifiedViaMp = true;
                 matchedPayment = pData;
+              } else {
+                mpDiagnostic = `Pagamento #${cleanPid} encontrado no Mercado Pago, mas status é '${pData.status}'.`;
               }
+            } else {
+              mpDiagnostic = `Pagamento #${cleanPid} não localizado no Mercado Pago (HTTP ${pRes.status}).`;
             }
           }
         }
 
         // B) Busca por e-mail do pagador
         if (!verifiedViaMp && cleanEmail) {
-          searchDebugInfo.queriedMethods.push(`payer.email:${cleanEmail}`);
           const searchUrl = `https://api.mercadopago.com/v1/payments/search?sort=date_created&criteria=desc&limit=15&payer.email=${encodeURIComponent(cleanEmail)}`;
           const mpRes = await fetch(searchUrl, {
-            headers: { Authorization: `Bearer ${mpAccessToken}` },
+            headers: { Authorization: `Bearer ${rawMpToken}` },
           });
           if (mpRes.ok) {
             const searchData = await mpRes.json();
             const results = searchData.results || [];
-            searchDebugInfo.totalResultsFound += results.length;
             const approved = results.find((p: any) => p.status === 'approved' || p.status === 'authorized');
             if (approved) {
               verifiedViaMp = true;
               matchedPayment = approved;
             }
+          } else if (mpRes.status === 401) {
+            mpDiagnostic = 'MERCADO_PAGO_ACCESS_TOKEN inválido ou não autorizado (401).';
           }
         }
 
         // C) Busca por external_reference (ID do usuário)
         if (!verifiedViaMp && cleanUserId) {
-          searchDebugInfo.queriedMethods.push(`external_reference:${cleanUserId}`);
           const searchUrl = `https://api.mercadopago.com/v1/payments/search?sort=date_created&criteria=desc&limit=15&external_reference=${encodeURIComponent(cleanUserId)}`;
           const mpRes = await fetch(searchUrl, {
-            headers: { Authorization: `Bearer ${mpAccessToken}` },
+            headers: { Authorization: `Bearer ${rawMpToken}` },
           });
           if (mpRes.ok) {
             const searchData = await mpRes.json();
             const results = searchData.results || [];
-            searchDebugInfo.totalResultsFound += results.length;
             const approved = results.find((p: any) => p.status === 'approved' || p.status === 'authorized');
             if (approved) {
               verifiedViaMp = true;
@@ -160,36 +164,32 @@ export default async function handler(req: any, res: any) {
           }
         }
 
-        // D) Busca ampla: Últimos pagamentos aprovados recebidos na conta da vendedora nas últimas 24 horas
+        // D) Busca ampla: Últimos pagamentos aprovados recebidos na conta da vendedora
         if (!verifiedViaMp) {
-          searchDebugInfo.queriedMethods.push('recent_seller_payments_24h');
           const recentUrl = `https://api.mercadopago.com/v1/payments/search?sort=date_created&criteria=desc&limit=30`;
           const recentRes = await fetch(recentUrl, {
-            headers: { Authorization: `Bearer ${mpAccessToken}` },
+            headers: { Authorization: `Bearer ${rawMpToken}` },
           });
           if (recentRes.ok) {
             const recentData = await recentRes.json();
             const results = recentData.results || [];
-            searchDebugInfo.totalResultsFound += results.length;
-            const oneDayAgo = new Date(Date.now() - 24 * 60 * 60 * 1000);
-
-            // Procura qualquer pagamento aprovado recente nas últimas 24h
+            
+            // Procura pagamentos aprovados recentes
             const recentApproved = results.find((p: any) => {
-              if (p.status !== 'approved' && p.status !== 'authorized') return false;
-              const dateStr = p.date_approved || p.date_created;
-              if (dateStr) {
-                const pDate = new Date(dateStr);
-                if (pDate < oneDayAgo) return false;
-              }
-              const amt = Number(p.transaction_amount || 0);
-              return amt >= 5; // Valores válidos de planos
+              return (p.status === 'approved' || p.status === 'authorized') && Number(p.transaction_amount || 0) >= 5;
             });
 
             if (recentApproved) {
               verifiedViaMp = true;
               matchedPayment = recentApproved;
               console.log('[VerifyPayment API] Pagamento recente aprovado localizado na conta:', recentApproved.id, recentApproved.transaction_amount);
+            } else if (results.length > 0) {
+              mpDiagnostic = `Encontradas ${results.length} transações recentes no Mercado Pago, mas nenhuma com status 'approved'.`;
+            } else {
+              mpDiagnostic = 'Nenhuma transação localizada nesta conta do Mercado Pago.';
             }
+          } else if (recentRes.status === 401) {
+            mpDiagnostic = 'Chave MERCADO_PAGO_ACCESS_TOKEN inválida ou de conta diferente na Vercel.';
           }
         }
 
@@ -206,8 +206,9 @@ export default async function handler(req: any, res: any) {
             detectedPlan = matchedPayment.metadata?.plan || plan || 'trimestral';
           }
         }
-      } catch (mpErr) {
+      } catch (mpErr: any) {
         console.warn('[VerifyPayment API] Erro ao consultar API do Mercado Pago:', mpErr);
+        mpDiagnostic = `Erro ao conectar com API do Mercado Pago: ${mpErr?.message || String(mpErr)}`;
       }
     }
 
@@ -257,8 +258,9 @@ export default async function handler(req: any, res: any) {
     return res.status(200).json({
       verified: false,
       status: profile?.subscription_status || 'trial',
-      message: 'Ainda não identificamos nenhum pagamento aprovado no Mercado Pago para esta conta. Se você acabou de pagar, aguarde alguns instantes para a compensação ou envie o comprovante no WhatsApp.',
-      debug: searchDebugInfo,
+      message: mpDiagnostic || 'Ainda não identificamos nenhum pagamento aprovado no Mercado Pago para esta conta. Se você acabou de pagar, digite o Nº do Pagamento do comprovante ou aguarde alguns instantes.',
+      tokenConfigured: Boolean(rawMpToken),
+      tokenType: rawMpToken.startsWith('TEST-') ? 'TEST' : rawMpToken.startsWith('APP_USR-') ? 'PRODUCTION' : 'UNKNOWN',
     });
   } catch (err: any) {
     console.error('[VerifyPayment API] Erro geral:', err);

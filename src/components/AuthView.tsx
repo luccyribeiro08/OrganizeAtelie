@@ -209,108 +209,124 @@ export const AuthView: React.FC<AuthViewProps> = ({
       return;
     }
 
-    let emailToAuth = cleanInput;
+    let targetEmail = cleanInput;
+    let targetUsername = cleanInput;
+    let profileData: any = null;
 
-    // Se o usuário digitou nome de usuário (sem @ e sem domínio de email)
-    if (!cleanInput.includes('@')) {
-      try {
-        const { data: profileByUsername } = await supabase
-          .from('profiles')
-          .select('email')
-          .eq('username', cleanInput)
-          .maybeSingle();
+    // 2. BUSCA INTELIGENTE DO USUÁRIO NO SUPABASE (por e-mail ou por @username)
+    try {
+      const { data } = await supabase
+        .from('profiles')
+        .select('*')
+        .or(`email.ilike.${cleanInput},username.ilike.${cleanInput}`)
+        .maybeSingle();
 
-        if (profileByUsername?.email) {
-          emailToAuth = profileByUsername.email.toLowerCase();
-        } else {
-          // Busca nos usuários locais registrados
-          const localMatch = registeredUsers.find(
-            (u) =>
-              (u.username && u.username.toLowerCase() === cleanInput) ||
-              u.name.toLowerCase() === cleanInput
-          );
-          if (localMatch?.email) {
-            emailToAuth = localMatch.email.toLowerCase();
-          }
-        }
-      } catch (e) {
-        console.log('Busca por username', e);
+      if (data) {
+        profileData = data;
+        if (data.email) targetEmail = data.email.toLowerCase().trim();
+        if (data.username) targetUsername = data.username.toLowerCase().trim();
+      }
+    } catch (e) {
+      console.warn('Consulta de perfil no Supabase:', e);
+    }
+
+    // Se não encontrou no Supabase, tenta buscar na base de usuários locais
+    if (!profileData) {
+      const localMatch = registeredUsers.find(
+        (u) =>
+          u.email?.toLowerCase().trim() === cleanInput ||
+          (u.username && u.username.toLowerCase().trim() === cleanInput) ||
+          (u.name && u.name.toLowerCase().trim() === cleanInput)
+      );
+      if (localMatch?.email) {
+        targetEmail = localMatch.email.toLowerCase().trim();
+        if (localMatch.username) targetUsername = localMatch.username.toLowerCase().trim();
       }
     }
 
-    // 1. Try Supabase Auth
+    // 3. CAMADA 1: AUTENTICAÇÃO VIA SUPABASE AUTH
+    let isAuthSuccess = false;
+    let authenticatedUser: UserAccount | null = null;
+
     try {
       const { data: authData, error: authError } = await supabase.auth.signInWithPassword({
-        email: emailToAuth,
+        email: targetEmail,
         password: loginPassword,
       });
 
-      if (authData?.user) {
+      if (authData?.user && !authError) {
+        isAuthSuccess = true;
         const userMeta = authData.user.user_metadata || {};
-        
-        // Fetch custom profile data if available
-        let profileName = userMeta.name || 'Artesã';
-        let atelieName = userMeta.atelie_name || 'Meu Ateliê';
-        let username = userMeta.username || cleanInput;
-        let phone = userMeta.phone || '';
-        let avatarUrl = userMeta.avatar_url || '';
-        let logoUrl = userMeta.logo_url || '';
-        let role = 'Artesã Responsável';
 
-        try {
-          const { data: profileData } = await supabase
-            .from('profiles')
-            .select('*')
-            .eq('id', authData.user.id)
-            .single();
-
-          if (profileData) {
-            profileName = profileData.name || profileName;
-            atelieName = profileData.atelie_name || atelieName;
-            username = profileData.username || username;
-            phone = profileData.phone || phone;
-            avatarUrl = profileData.avatar_url || avatarUrl;
-            logoUrl = profileData.logo_url || logoUrl;
-            role = profileData.role || role;
-          }
-        } catch (pe) {
-          console.error('Error fetching profile from Supabase', pe);
-        }
-
-        const loggedUser: UserAccount = {
+        authenticatedUser = {
           id: authData.user.id,
-          name: profileName,
-          atelieName: atelieName,
-          username: username,
-          email: authData.user.email || emailToAuth,
+          name: profileData?.name || userMeta.name || 'Artesã',
+          atelieName: profileData?.atelie_name || userMeta.atelie_name || 'Meu Ateliê',
+          username: profileData?.username || userMeta.username || targetUsername,
+          email: authData.user.email || targetEmail,
           password: loginPassword,
-          phone: phone,
-          avatarUrl: avatarUrl,
-          logoUrl: logoUrl,
-          role: role,
-          createdAt: authData.user.created_at || new Date().toISOString(),
+          phone: profileData?.phone || userMeta.phone || '',
+          avatarUrl: profileData?.avatar_url || userMeta.avatar_url || '',
+          logoUrl: profileData?.logo_url || userMeta.logo_url || '',
+          role: profileData?.role || 'Artesã Responsável',
+          createdAt: authData.user.created_at || profileData?.created_at || new Date().toISOString(),
+          subscriptionStatus: profileData?.subscription_status || 'trial',
+          subscriptionPlan: profileData?.subscription_plan || 'free_trial',
+          trialEndsAt: profileData?.trial_ends_at,
+          subscriptionExpiresAt: profileData?.subscription_expires_at,
         };
-
-        triggerConfetti();
-        onLoginSuccess(loggedUser);
-        setLoading(false);
-        return;
       }
     } catch (supaErr) {
-      console.log('Supabase login check', supaErr);
+      console.warn('Supabase Auth signIn check:', supaErr);
     }
 
-    // 2. Fallback to registered local users (com validação estrita de senha)
-    const localUser = registeredUsers.find(
-      (u) =>
-        u.email.toLowerCase() === cleanInput ||
-        (u.username && u.username.toLowerCase() === cleanInput) ||
-        u.name.toLowerCase() === cleanInput
-    );
+    // 4. CAMADA 2: FALLBACK PARA USUÁRIO LOCAL / CACHE SEGURO
+    // (Útil se a confirmação de email do Supabase estiver pendente ou a rede oscilar)
+    if (!isAuthSuccess) {
+      const localUser = registeredUsers.find(
+        (u) =>
+          u.email?.toLowerCase().trim() === targetEmail ||
+          u.email?.toLowerCase().trim() === cleanInput ||
+          (u.username && u.username.toLowerCase().trim() === targetUsername) ||
+          (u.name && u.name.toLowerCase().trim() === cleanInput)
+      );
 
-    if (localUser && localUser.password && localUser.password === loginPassword) {
+      if (localUser && localUser.password && localUser.password === loginPassword) {
+        isAuthSuccess = true;
+        authenticatedUser = {
+          ...localUser,
+          subscriptionStatus: profileData?.subscription_status || localUser.subscriptionStatus || 'trial',
+          subscriptionPlan: profileData?.subscription_plan || localUser.subscriptionPlan || 'free_trial',
+          trialEndsAt: profileData?.trial_ends_at || localUser.trialEndsAt,
+          subscriptionExpiresAt: profileData?.subscription_expires_at || localUser.subscriptionExpiresAt,
+        };
+
+        // Sincroniza em background com o Supabase Auth para próximos logins
+        supabase.auth.signUp({
+          email: localUser.email.toLowerCase().trim(),
+          password: loginPassword,
+          options: {
+            data: {
+              name: localUser.name,
+              atelie_name: localUser.atelieName,
+              username: localUser.username,
+              phone: localUser.phone,
+            },
+          },
+        }).catch(() => {});
+      }
+    }
+
+    // 5. LOGIN BEM-SUCEDIDO
+    if (isAuthSuccess && authenticatedUser) {
+      // Persiste no LocalStorage para que o dispositivo mantenha a sessão ativa
+      try {
+        localStorage.setItem('atelie_current_user_v3', JSON.stringify(authenticatedUser));
+        localStorage.setItem('atelie_saved_device_user_v2', JSON.stringify(authenticatedUser));
+      } catch {}
+
       triggerConfetti();
-      onLoginSuccess(localUser);
+      onLoginSuccess(authenticatedUser);
       setLoading(false);
       return;
     }
@@ -319,7 +335,7 @@ export const AuthView: React.FC<AuthViewProps> = ({
     setErrorMsg('Usuário ou senha incorretos. Verifique suas credenciais.');
   };
 
-  // Register Submit
+  // Register Submit (Criação de novos usuários com 7 dias grátis)
   const handleRegisterSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setErrorMsg('');
@@ -342,7 +358,7 @@ export const AuthView: React.FC<AuthViewProps> = ({
       return;
     }
     if (!regPassword || regPassword.length < 6) {
-      setErrorMsg('A senha deve ter no mínimo 6 caracteres para o Supabase.');
+      setErrorMsg('A senha deve ter no mínimo 6 caracteres.');
       return;
     }
     if (regPassword !== regConfirmPassword) {
@@ -351,6 +367,7 @@ export const AuthView: React.FC<AuthViewProps> = ({
     }
 
     const cleanUsername = regUsername.trim().toLowerCase().replace(/[^a-z0-9_.]/g, '');
+    const cleanEmail = regEmail.trim().toLowerCase();
 
     const defaultAvatar =
       regAvatarUrl ||
@@ -359,9 +376,9 @@ export const AuthView: React.FC<AuthViewProps> = ({
     setLoading(true);
 
     try {
-      // 1. Create User in Supabase Auth (auth.users)
+      // 1. Cria o usuário no Supabase Auth
       const { data: authData, error: authError } = await supabase.auth.signUp({
-        email: regEmail.trim().toLowerCase(),
+        email: cleanEmail,
         password: regPassword,
         options: {
           data: {
@@ -381,26 +398,32 @@ export const AuthView: React.FC<AuthViewProps> = ({
           setLoading(false);
           return;
         }
-        console.warn('Supabase Auth warning:', authError.message);
+        console.warn('Supabase Auth aviso:', authError.message);
       }
 
       const userId = authData?.user?.id || `user-${Date.now()}`;
+      const trialEnds = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString();
 
-      // 2. Upsert profile in Supabase profiles table
+      // 2. Salva o perfil na tabela profiles do Supabase com 7 dias de trial
       try {
         await supabase.from('profiles').upsert({
           id: userId,
           name: regName.trim(),
           atelie_name: regAtelieName.trim(),
           username: cleanUsername,
-          email: regEmail.trim().toLowerCase(),
+          email: cleanEmail,
           phone: regPhone.trim(),
           avatar_url: defaultAvatar,
           logo_url: defaultAvatar,
           role: 'Artesã Responsável',
+          trial_ends_at: trialEnds,
+          subscription_status: 'trial',
+          subscription_plan: 'free_trial',
+          created_at: new Date().toISOString(),
+          updated_at: new Date().toISOString(),
         });
       } catch (errProfile) {
-        console.error('Error creating profile in database', errProfile);
+        console.error('Erro ao salvar perfil no banco de dados:', errProfile);
       }
 
       const newUser: UserAccount = {
@@ -408,14 +431,23 @@ export const AuthView: React.FC<AuthViewProps> = ({
         name: regName.trim(),
         atelieName: regAtelieName.trim(),
         username: cleanUsername,
-        email: regEmail.trim().toLowerCase(),
+        email: cleanEmail,
         password: regPassword,
         phone: regPhone.trim(),
         avatarUrl: defaultAvatar,
         logoUrl: defaultAvatar,
         role: 'Artesã Responsável',
         createdAt: new Date().toISOString(),
+        trialEndsAt: trialEnds,
+        subscriptionStatus: 'trial',
+        subscriptionPlan: 'free_trial',
       };
+
+      // Persiste no dispositivo e na lista de usuários registrados
+      try {
+        localStorage.setItem('atelie_current_user_v3', JSON.stringify(newUser));
+        localStorage.setItem('atelie_saved_device_user_v2', JSON.stringify(newUser));
+      } catch {}
 
       onRegisterUser(newUser);
       triggerConfetti();
@@ -424,7 +456,7 @@ export const AuthView: React.FC<AuthViewProps> = ({
         onLoginSuccess(newUser);
       }, 700);
     } catch (err: any) {
-      setErrorMsg(err?.message || 'Erro ao criar conta no Supabase.');
+      setErrorMsg(err?.message || 'Erro ao criar conta.');
     } finally {
       setLoading(false);
     }

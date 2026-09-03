@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import {
   Check,
   Crown,
@@ -17,12 +17,14 @@ import {
   ArrowRight,
   Loader2,
   RefreshCw,
-  Gift
+  Gift,
+  ExternalLink
 } from 'lucide-react';
-import { AtelieProfile } from '../types';
+import { AtelieProfile, MercadoPagoLinks } from '../types';
 import { getSubscriptionInfo } from '../utils/subscriptionUtils';
 import { triggerConfetti } from '../utils/helpers';
 import { supabase } from '../lib/supabaseClient';
+import { supabaseService } from '../services/supabaseService';
 
 interface SubscriptionViewProps {
   profile: AtelieProfile | null;
@@ -36,8 +38,9 @@ export const SubscriptionView: React.FC<SubscriptionViewProps> = ({
   onNavigateHome,
 }) => {
   const subInfo = getSubscriptionInfo(profile);
-  const [selectedPeriod, setSelectedPeriod] = useState<'mensal' | 'anual'>('mensal');
+  const [selectedPeriod, setSelectedPeriod] = useState<'mensal' | 'trimestral' | 'anual'>('trimestral');
   const [isGeneratingPayment, setIsGeneratingPayment] = useState(false);
+  const [globalLinks, setGlobalLinks] = useState<MercadoPagoLinks | null>(null);
   const [paymentSuccessData, setPaymentSuccessData] = useState<{
     qrCodeUrl?: string;
     pixCode?: string;
@@ -51,16 +54,55 @@ export const SubscriptionView: React.FC<SubscriptionViewProps> = ({
     message: string;
   } | null>(null);
 
-  const priceMonthly = 39.90;
-  const priceAnnual = 349.90; // ~R$ 29,15/mês
+  // Carrega links do Mercado Pago globais configurados pelo Admin Master
+  useEffect(() => {
+    supabaseService.getGlobalAdminMercadoPagoLinks().then((links) => {
+      if (links) {
+        setGlobalLinks(links);
+      }
+    });
+  }, []);
 
-  // Simulação / Chamada de API para gerar o pagamento
+  const mpLinks = globalLinks || profile?.mercadoPagoLinks || {};
+  const currentPixKey = mpLinks.pixKey || profile?.pixKey || '21973389309';
+  const supportPhone = mpLinks.whatsappAdmin || '21973389309';
+
+  const priceMonthly = 14.99;
+  const priceQuarterly = 34.99;
+  const priceAnnual = 129.99;
+
+  const currentPrice =
+    selectedPeriod === 'anual'
+      ? priceAnnual
+      : selectedPeriod === 'trimestral'
+      ? priceQuarterly
+      : priceMonthly;
+
+  const currentMpLink = (
+    selectedPeriod === 'anual'
+      ? mpLinks.anual
+      : selectedPeriod === 'trimestral'
+      ? mpLinks.trimestral
+      : mpLinks.mensal
+  )?.trim();
+
+  // Executa o pagamento: Abre o link do Mercado Pago se configurado ou gera PIX
   const handleGeneratePayment = async () => {
+    // 1. Se o Admin configurou link de pagamento do Mercado Pago para este plano, redireciona direto!
+    if (currentMpLink) {
+      window.open(currentMpLink, '_blank');
+      setNotification({
+        type: 'info',
+        message: 'Abrindo página de pagamento do Mercado Pago em nova guia...',
+      });
+      return;
+    }
+
+    // 2. Se não houver link direto, gera PIX instantâneo
     setIsGeneratingPayment(true);
     setNotification(null);
 
     try {
-      // Simulação de chamada para API / Edge Function: /api/create-checkout ou /functions/v1/create-checkout
       const response = await fetch('/api/create-checkout', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -69,7 +111,7 @@ export const SubscriptionView: React.FC<SubscriptionViewProps> = ({
           userEmail: profile?.email,
           userName: profile?.name || profile?.ownerName,
           plan: selectedPeriod,
-          amount: selectedPeriod === 'mensal' ? priceMonthly : priceAnnual,
+          amount: currentPrice,
         }),
       }).catch(() => null);
 
@@ -78,17 +120,13 @@ export const SubscriptionView: React.FC<SubscriptionViewProps> = ({
         data = await response.json();
       }
 
-      // Se a rota mock retornar ou fallback simulado:
       const generatedPixCode =
         data?.pixCode ||
-        `00020126580014br.gov.bcb.pix0136${(profile?.id || 'atelie-luccy-ribeiro').padEnd(36, '0')}520400005303986540${selectedPeriod === 'mensal' ? '39.90' : '349.90'}5802BR5925ORGANIZESAASTELEIE6009SAOPAULO62070503***6304`;
+        `00020126580014br.gov.bcb.pix0136${(profile?.id || 'atelie-luccy-ribeiro').padEnd(36, '0')}520400005303986540${currentPrice.toFixed(2)}5802BR5925ORGANIZESAASTELEIE6009SAOPAULO62070503***6304`;
 
       setPaymentSuccessData({
         pixCode: generatedPixCode,
-        checkoutUrl:
-          profile?.mercadoPagoLinks?.mensal ||
-          data?.checkoutUrl ||
-          'https://www.mercadopago.com.br',
+        checkoutUrl: currentMpLink || data?.checkoutUrl || 'https://www.mercadopago.com.br',
         expiresAt: new Date(Date.now() + 30 * 60 * 1000).toLocaleTimeString('pt-BR', {
           hour: '2-digit',
           minute: '2-digit',
@@ -298,12 +336,12 @@ export const SubscriptionView: React.FC<SubscriptionViewProps> = ({
           </div>
         )}
 
-        {/* ================= SELETOR DE PERÍODO (MENSAL / ANUAL) ================= */}
+        {/* ================= SELETOR DE PERÍODO (MENSAL / TRIMESTRAL / ANUAL) ================= */}
         <div className="flex justify-center">
-          <div className="bg-pink-100/70 p-1 rounded-2xl border border-pink-200 flex items-center gap-1 shadow-2xs">
+          <div className="bg-pink-100/70 p-1.5 rounded-2xl border border-pink-200 flex flex-wrap items-center justify-center gap-1 shadow-2xs">
             <button
               onClick={() => setSelectedPeriod('mensal')}
-              className={`px-5 py-2 rounded-xl text-xs font-bold transition-all cursor-pointer ${
+              className={`px-4 py-2 rounded-xl text-xs font-bold transition-all cursor-pointer ${
                 selectedPeriod === 'mensal'
                   ? 'bg-[#ac2471] text-white shadow-xs'
                   : 'text-slate-600 hover:text-[#ac2471]'
@@ -312,16 +350,29 @@ export const SubscriptionView: React.FC<SubscriptionViewProps> = ({
               Plano Mensal
             </button>
             <button
+              onClick={() => setSelectedPeriod('trimestral')}
+              className={`px-4 py-2 rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer ${
+                selectedPeriod === 'trimestral'
+                  ? 'bg-[#ac2471] text-white shadow-xs'
+                  : 'text-slate-600 hover:text-[#ac2471]'
+              }`}
+            >
+              <span>Trimestral</span>
+              <span className="px-1.5 py-0.5 rounded-md bg-amber-400 text-amber-950 text-[10px] font-black">
+                🔥 POPULAR
+              </span>
+            </button>
+            <button
               onClick={() => setSelectedPeriod('anual')}
-              className={`px-5 py-2 rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer ${
+              className={`px-4 py-2 rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer ${
                 selectedPeriod === 'anual'
                   ? 'bg-[#ac2471] text-white shadow-xs'
                   : 'text-slate-600 hover:text-[#ac2471]'
               }`}
             >
               <span>Plano Anual</span>
-              <span className="px-1.5 py-0.5 rounded-md bg-amber-400 text-amber-950 text-[10px] font-black">
-                -27% OFF
+              <span className="px-1.5 py-0.5 rounded-md bg-emerald-500 text-white text-[10px] font-black">
+                -28% OFF
               </span>
             </button>
           </div>
@@ -375,13 +426,13 @@ export const SubscriptionView: React.FC<SubscriptionViewProps> = ({
             {/* Badge de Destaque */}
             <div className="absolute top-0 right-0">
               <span className="inline-block bg-gradient-to-l from-[#ac2471] to-pink-500 text-white text-[10px] font-black uppercase tracking-wider px-4 py-1.5 rounded-bl-2xl shadow-xs">
-                {selectedPeriod === 'anual' ? 'Mais Econômico' : 'Mais Popular'}
+                {selectedPeriod === 'anual' ? 'Mais Econômico' : selectedPeriod === 'trimestral' ? 'Mais Escolhido' : 'Ideal para Começar'}
               </span>
             </div>
 
             <div>
               <span className="text-xs font-bold text-[#ac2471] uppercase tracking-wider">
-                {selectedPeriod === 'anual' ? 'Assinatura Anual' : 'Assinatura Mensal'}
+                {selectedPeriod === 'anual' ? 'Assinatura Anual' : selectedPeriod === 'trimestral' ? 'Assinatura Trimestral' : 'Assinatura Mensal'}
               </span>
               <h3 className="text-2xl font-extrabold text-slate-800">
                 Plano Organize Ateliê Pro
@@ -393,15 +444,20 @@ export const SubscriptionView: React.FC<SubscriptionViewProps> = ({
               <div className="flex items-baseline gap-1">
                 <span className="text-sm font-bold text-slate-500">R$</span>
                 <span className="text-4xl font-black text-slate-900 tracking-tight">
-                  {selectedPeriod === 'mensal' ? '39,90' : '349,90'}
+                  {currentPrice.toFixed(2).replace('.', ',')}
                 </span>
                 <span className="text-xs text-slate-500 font-semibold">
-                  {selectedPeriod === 'mensal' ? '/ mês' : '/ ano'}
+                  {selectedPeriod === 'mensal' ? '/ mês' : selectedPeriod === 'trimestral' ? '/ 3 meses' : '/ ano'}
                 </span>
               </div>
+              {selectedPeriod === 'trimestral' && (
+                <p className="text-[11px] text-[#ac2471] font-bold mt-1">
+                  Equivalente a apenas R$ 11,66/mês (Economia de 22%)
+                </p>
+              )}
               {selectedPeriod === 'anual' && (
                 <p className="text-[11px] text-emerald-700 font-bold mt-1">
-                  Equivalente a apenas R$ 29,15/mês (Economia de R$ 128,90)
+                  Equivalente a apenas R$ 10,83/mês (Economia de 28%)
                 </p>
               )}
             </div>
@@ -488,7 +544,7 @@ export const SubscriptionView: React.FC<SubscriptionViewProps> = ({
               /* BOTÃO PRINCIPAL DE ASSINATURA */
               <div className="space-y-3">
                 <button
-                  id="btn-assinar-plano-mensal"
+                  id="btn-assinar-plano"
                   onClick={handleGeneratePayment}
                   disabled={isGeneratingPayment}
                   className="w-full py-4 px-6 rounded-2xl bg-gradient-to-r from-[#ac2471] via-pink-600 to-[#ac2471] text-white font-extrabold text-sm sm:text-base shadow-lg shadow-pink-500/20 hover:shadow-xl hover:from-pink-800 hover:to-pink-700 active:scale-95 transition-all flex items-center justify-center gap-2 cursor-pointer disabled:opacity-75"
@@ -498,13 +554,19 @@ export const SubscriptionView: React.FC<SubscriptionViewProps> = ({
                       <Loader2 className="w-5 h-5 animate-spin" />
                       <span>Gerando Pagamento Seguro...</span>
                     </>
+                  ) : currentMpLink ? (
+                    <>
+                      <Zap className="w-5 h-5 text-amber-300" />
+                      <span>
+                        Pagar no Mercado Pago • R$ {currentPrice.toFixed(2).replace('.', ',')}
+                      </span>
+                      <ExternalLink className="w-4 h-4 ml-1" />
+                    </>
                   ) : (
                     <>
                       <Zap className="w-5 h-5 text-amber-300" />
                       <span>
-                        {selectedPeriod === 'mensal'
-                          ? 'Assinar Plano Mensal • R$ 39,90'
-                          : 'Assinar Plano Anual • R$ 349,90'}
+                        Assinar {selectedPeriod === 'mensal' ? 'Plano Mensal' : selectedPeriod === 'trimestral' ? 'Plano Trimestral' : 'Plano Anual'} • R$ {currentPrice.toFixed(2).replace('.', ',')}
                       </span>
                       <ArrowRight className="w-4 h-4 ml-1" />
                     </>
@@ -525,7 +587,7 @@ export const SubscriptionView: React.FC<SubscriptionViewProps> = ({
                 <span>Dúvidas ou PIX Manual?</span>
               </span>
               <a
-                href={`https://wa.me/5511987654321?text=${encodeURIComponent(
+                href={`https://wa.me/55${supportPhone.replace(/\D/g, '') || '21973389309'}?text=${encodeURIComponent(
                   'Olá! Gostaria de tirar uma dúvida sobre a assinatura do Organize Ateliê.'
                 )}`}
                 target="_blank"

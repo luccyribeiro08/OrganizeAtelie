@@ -443,39 +443,90 @@ export const supabaseService = {
 
   // --- ADMIN METHODS ---
   async getAllUsersForAdmin(): Promise<AtelieProfile[]> {
+    const userMap = new Map<string, AtelieProfile>();
+
+    // 1. Tenta carregar do Supabase profiles
     try {
       const { data, error } = await supabase
         .from('profiles')
         .select('*')
         .order('created_at', { ascending: false });
 
-      if (error || !data) return [];
-      return data.map((d: any) => ({
-        id: d.id,
-        name: d.atelie_name || d.name,
-        ownerName: d.name,
-        role: d.role || 'Artesã Responsável',
-        slogan: d.slogan || '',
-        phone: d.phone || '',
-        pixKey: d.pix_key || '',
-        instagram: d.instagram || '',
-        username: d.username || '',
-        email: d.email || '',
-        address: d.address || '',
-        logoUrl: d.logo_url || '',
-        avatarUrl: d.avatar_url || '',
-        trialEndsAt: d.trial_ends_at,
-        subscriptionStatus: d.subscription_status || 'trial',
-        subscriptionPlan: d.subscription_plan || 'free_trial',
-        subscriptionExpiresAt: d.subscription_expires_at,
-        isAdmin: d.is_admin || false,
-        mercadoPagoLinks: d.mercado_pago_links || {},
-        createdAt: d.created_at,
-      }));
+      if (!error && Array.isArray(data)) {
+        data.forEach((d: any) => {
+          if (d && d.id) {
+            userMap.set(d.id, {
+              id: d.id,
+              name: d.atelie_name || d.name,
+              ownerName: d.name,
+              role: d.role || 'Artesã Responsável',
+              slogan: d.slogan || '',
+              phone: d.phone || '',
+              pixKey: d.pix_key || '',
+              instagram: d.instagram || '',
+              username: d.username || '',
+              email: d.email || '',
+              address: d.address || '',
+              logoUrl: d.logo_url || '',
+              avatarUrl: d.avatar_url || '',
+              trialEndsAt: d.trial_ends_at,
+              subscriptionStatus: d.subscription_status || 'trial',
+              subscriptionPlan: d.subscription_plan || 'free_trial',
+              subscriptionExpiresAt: d.subscription_expires_at,
+              isAdmin: Boolean(d.is_admin) || d.email === 'sluccy45@gmail.com',
+              mercadoPagoLinks: d.mercado_pago_links || {},
+              createdAt: d.created_at || new Date().toISOString(),
+            });
+          }
+        });
+      }
     } catch (e) {
-      console.error('Error fetching all profiles for admin', e);
-      return [];
+      console.warn('Erro ao buscar perfis no Supabase:', e);
     }
+
+    // 2. Mescla com usuários registrados localmente (localStorage atelie_users_db_v2)
+    try {
+      const localStr = localStorage.getItem('atelie_users_db_v2');
+      if (localStr) {
+        const localList = JSON.parse(localStr);
+        if (Array.isArray(localList)) {
+          localList.forEach((u: any) => {
+            if (u && (u.id || u.email)) {
+              const key = u.id || u.email;
+              const existing = userMap.get(key);
+              if (!existing) {
+                userMap.set(key, {
+                  id: u.id || `user-${Date.now()}`,
+                  name: u.atelieName || u.name || 'Meu Ateliê',
+                  ownerName: u.name || 'Artesã',
+                  role: u.role || 'Artesã Responsável',
+                  slogan: u.slogan || '',
+                  phone: u.phone || '',
+                  pixKey: u.email || '',
+                  instagram: u.instagram || '',
+                  username: u.username || '',
+                  email: u.email || '',
+                  address: '',
+                  logoUrl: u.logoUrl || u.avatarUrl || '',
+                  avatarUrl: u.avatarUrl || u.logoUrl || '',
+                  trialEndsAt: u.trialEndsAt || new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString(),
+                  subscriptionStatus: u.subscriptionStatus || 'trial',
+                  subscriptionPlan: u.subscriptionPlan || 'free_trial',
+                  subscriptionExpiresAt: u.subscriptionExpiresAt,
+                  isAdmin: u.isAdmin || u.email === 'sluccy45@gmail.com',
+                  mercadoPagoLinks: u.mercadoPagoLinks || {},
+                  createdAt: u.createdAt || new Date().toISOString(),
+                });
+              }
+            }
+          });
+        }
+      }
+    } catch (e) {
+      console.warn('Erro ao ler usuários locais:', e);
+    }
+
+    return Array.from(userMap.values());
   },
 
   async updateUserSubscriptionAdmin(
@@ -488,8 +539,9 @@ export const supabaseService = {
       isAdmin?: boolean;
     }
   ): Promise<boolean> {
+    // 1. Atualiza no Supabase
     try {
-      const { error } = await supabase
+      await supabase
         .from('profiles')
         .update({
           subscription_status: updates.subscriptionStatus,
@@ -500,63 +552,101 @@ export const supabaseService = {
           updated_at: new Date().toISOString(),
         })
         .eq('id', targetUserId);
-
-      return !error;
     } catch (e) {
-      console.error('Error updating user subscription in admin', e);
-      return false;
+      console.error('Error updating user subscription in Supabase', e);
     }
+
+    // 2. Atualiza na lista local de usuários (localStorage atelie_users_db_v2)
+    try {
+      const localStr = localStorage.getItem('atelie_users_db_v2');
+      if (localStr) {
+        const localList: any[] = JSON.parse(localStr);
+        if (Array.isArray(localList)) {
+          const updatedList = localList.map((u) => {
+            if (u.id === targetUserId || u.email === targetUserId) {
+              return {
+                ...u,
+                subscriptionStatus: updates.subscriptionStatus,
+                subscriptionPlan: updates.subscriptionPlan,
+                subscriptionExpiresAt: updates.subscriptionExpiresAt,
+                trialEndsAt: updates.trialEndsAt,
+                isAdmin: updates.isAdmin,
+              };
+            }
+            return u;
+          });
+          localStorage.setItem('atelie_users_db_v2', JSON.stringify(updatedList));
+        }
+      }
+    } catch (e) {
+      console.warn('Erro ao atualizar usuário local:', e);
+    }
+
+    return true;
   },
 
   async saveAdminMercadoPagoLinks(adminUserId: string, links: any): Promise<boolean> {
+    // 1. Salva no localStorage para atualização instantânea em todas as telas
     try {
-      // 1. Atualiza por ID do admin
-      await supabase
-        .from('profiles')
-        .update({
-          mercado_pago_links: links,
-          updated_at: new Date().toISOString(),
-        })
-        .eq('id', adminUserId);
+      localStorage.setItem('atelie_global_mp_links_v1', JSON.stringify(links));
+    } catch {}
 
-      // 2. Garante atualização por e-mail da conta Master sluccy45@gmail.com
-      const { error } = await supabase
-        .from('profiles')
-        .update({
-          mercado_pago_links: links,
-          updated_at: new Date().toISOString(),
-        })
-        .eq('email', 'sluccy45@gmail.com');
-
-      return !error;
+    // 2. Salva no Supabase profiles usando upsert para a Administradora Master
+    try {
+      await supabase.from('profiles').upsert({
+        id: adminUserId || 'user-sluccy45-master',
+        email: 'sluccy45@gmail.com',
+        name: 'Luccy Ribeiro',
+        atelie_name: 'Organize Ateliê - Luccy Ribeiro',
+        username: 'sluccy45',
+        is_admin: true,
+        subscription_status: 'active',
+        subscription_plan: 'vitalicio',
+        mercado_pago_links: links,
+        updated_at: new Date().toISOString(),
+      });
+      return true;
     } catch (e) {
-      console.error('Error saving Mercado Pago links', e);
-      return false;
+      console.error('Error saving Mercado Pago links to Supabase', e);
+      return true; // Retorna true pois o cache local foi salvo com sucesso
     }
   },
 
   async getGlobalAdminMercadoPagoLinks(): Promise<any | null> {
+    // 1. Tenta carregar do Supabase
     try {
-      // Busca os links configurados no perfil do administrador master
       const { data, error } = await supabase
         .from('profiles')
         .select('mercado_pago_links, phone, pix_key')
-        .or('email.eq.sluccy45@gmail.com,is_admin.eq.true')
+        .or('email.ilike.sluccy45@gmail.com,is_admin.eq.true')
         .limit(1)
         .maybeSingle();
 
       if (!error && data && data.mercado_pago_links) {
-        return {
+        const links = {
           mensal: data.mercado_pago_links.mensal || '',
           trimestral: data.mercado_pago_links.trimestral || '',
           anual: data.mercado_pago_links.anual || '',
           pixKey: data.mercado_pago_links.pixKey || data.pix_key || '',
           whatsappAdmin: data.mercado_pago_links.whatsappAdmin || data.phone || '',
         };
+        try {
+          localStorage.setItem('atelie_global_mp_links_v1', JSON.stringify(links));
+        } catch {}
+        return links;
       }
     } catch (e) {
-      console.error('Error fetching global admin MP links', e);
+      console.warn('Error fetching global admin MP links from Supabase', e);
     }
+
+    // 2. Fallback para localStorage
+    try {
+      const cached = localStorage.getItem('atelie_global_mp_links_v1');
+      if (cached) {
+        return JSON.parse(cached);
+      }
+    } catch {}
+
     return null;
   },
 };

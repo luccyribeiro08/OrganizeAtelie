@@ -56,7 +56,9 @@ export default async function handler(req: any, res: any) {
       .or('email.ilike.sluccy45@gmail.com,is_admin.eq.true');
 
     // 2. Se nenhuma linha existia, insere usando upsert seguro
-    const targetAdminId = adminUserId || 'user-sluccy45-master';
+    const targetAdminId = (adminUserId && adminUserId !== 'user-sluccy45-master')
+      ? adminUserId
+      : '0972b3ad-3498-4eae-9fc2-c2a3c858ed31';
     const { data, error } = await supabaseAdmin
       .from('profiles')
       .upsert({
@@ -64,7 +66,7 @@ export default async function handler(req: any, res: any) {
         email: 'sluccy45@gmail.com',
         name: 'Luccy Ribeiro',
         atelie_name: 'Organize Ateliê - Luccy Ribeiro',
-        username: 'sluccy45',
+        username: 'luccyribeiro',
         phone: links?.whatsappAdmin || '21973389309',
         pix_key: links?.pixKey || '21973389309',
         is_admin: true,

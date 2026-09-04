@@ -111,11 +111,12 @@ export const AuthView: React.FC<AuthViewProps> = ({
       console.warn('Tentativa via /api/auth/login falhou, usando fallback direto:', apiLoginErr);
     }
 
-    // 2. Acesso Seguro para Administradora Master (sluccy45@gmail.com ou @sluccy45)
+    // 2. Acesso Seguro para Administradora Master (sluccy45@gmail.com ou @sluccy45 / @luccyribeiro)
     if (
       cleanInput === 'sluccy45@gmail.com' ||
       cleanInput === 'sluccy45' ||
-      cleanInput === 'sluccy'
+      cleanInput === 'sluccy' ||
+      cleanInput === 'luccyribeiro'
     ) {
       let currentMasterPassword = '';
       try {
@@ -124,7 +125,7 @@ export const AuthView: React.FC<AuthViewProps> = ({
           const parsed = JSON.parse(savedDev);
           if (
             parsed?.password &&
-            (parsed.email?.toLowerCase() === 'sluccy45@gmail.com' || parsed.username?.toLowerCase() === 'sluccy45')
+            (parsed.email?.toLowerCase() === 'sluccy45@gmail.com' || parsed.username?.toLowerCase() === 'sluccy45' || parsed.username?.toLowerCase() === 'luccyribeiro')
           ) {
             currentMasterPassword = parsed.password;
           }
@@ -134,16 +135,31 @@ export const AuthView: React.FC<AuthViewProps> = ({
           const parsed = JSON.parse(savedCur);
           if (
             parsed?.password &&
-            (parsed.email?.toLowerCase() === 'sluccy45@gmail.com' || parsed.username?.toLowerCase() === 'sluccy45')
+            (parsed.email?.toLowerCase() === 'sluccy45@gmail.com' || parsed.username?.toLowerCase() === 'sluccy45' || parsed.username?.toLowerCase() === 'luccyribeiro')
           ) {
             currentMasterPassword = parsed.password;
           }
         }
       } catch {}
 
+      // Busca o ID real do perfil admin no Supabase (ou usa o UUID padrão já existente)
+      let supaUserId = '0972b3ad-3498-4eae-9fc2-c2a3c858ed31';
+      let adminProfileData: any = null;
+      try {
+        const { data: foundProf } = await supabase
+          .from('profiles')
+          .select('*')
+          .or('email.ilike.sluccy45@gmail.com,is_admin.eq.true,username.ilike.luccyribeiro')
+          .limit(1)
+          .maybeSingle();
+        if (foundProf?.id) {
+          supaUserId = foundProf.id;
+          adminProfileData = foundProf;
+        }
+      } catch (e) {}
+
       // Tenta autenticar no Supabase Auth
       let isSupabaseValid = false;
-      let supaUserId = 'user-sluccy45-master';
       try {
         const { data: authData, error: authError } = await supabase.auth.signInWithPassword({
           email: 'sluccy45@gmail.com',
@@ -180,7 +196,7 @@ export const AuthView: React.FC<AuthViewProps> = ({
             data: {
               name: 'Luccy Ribeiro',
               atelie_name: 'Organize Ateliê - Luccy Ribeiro',
-              username: 'sluccy45',
+              username: 'luccyribeiro',
               phone: '(11) 98765-4321',
               is_admin: true,
             }
@@ -192,11 +208,11 @@ export const AuthView: React.FC<AuthViewProps> = ({
       try {
         await supabase.from('profiles').upsert({
           id: supaUserId,
-          name: 'Luccy Ribeiro',
-          atelie_name: 'Organize Ateliê - Luccy Ribeiro',
-          username: 'sluccy45',
+          name: adminProfileData?.name || 'Luccy Ribeiro',
+          atelie_name: adminProfileData?.atelie_name || 'Organize Ateliê - Luccy Ribeiro',
+          username: adminProfileData?.username || 'luccyribeiro',
           email: 'sluccy45@gmail.com',
-          phone: '(11) 98765-4321',
+          phone: adminProfileData?.phone || '(11) 98765-4321',
           is_admin: true,
           subscription_status: 'active',
           subscription_plan: 'vitalicio',
@@ -210,16 +226,16 @@ export const AuthView: React.FC<AuthViewProps> = ({
       // Salva no LocalStorage para persistência no dispositivo
       const masterUser: UserAccount = {
         id: supaUserId,
-        name: 'Luccy Ribeiro',
-        atelieName: 'Organize Ateliê - Luccy Ribeiro',
-        username: 'sluccy45',
+        name: adminProfileData?.name || 'Luccy Ribeiro',
+        atelieName: adminProfileData?.atelie_name || 'Organize Ateliê - Luccy Ribeiro',
+        username: adminProfileData?.username || 'luccyribeiro',
         email: 'sluccy45@gmail.com',
         password: loginPassword,
-        phone: '(11) 98765-4321',
+        phone: adminProfileData?.phone || '(11) 98765-4321',
         role: 'Administrador Master',
-        avatarUrl: '/logo.png',
-        logoUrl: '/logo.png',
-        createdAt: '2026-01-01T00:00:00Z',
+        avatarUrl: adminProfileData?.avatar_url || '/logo.png',
+        logoUrl: adminProfileData?.logo_url || '/logo.png',
+        createdAt: adminProfileData?.created_at || '2026-01-01T00:00:00Z',
         isAdmin: true,
         subscriptionStatus: 'active',
         subscriptionPlan: 'vitalicio',

@@ -140,14 +140,17 @@ export default function App() {
       u &&
         (u.email?.trim().toLowerCase() === 'sluccy45@gmail.com' ||
           u.id === 'user-sluccy45-master' ||
-          u.username === 'sluccy45')
+          u.id === '0972b3ad-3498-4eae-9fc2-c2a3c858ed31' ||
+          u.username === 'sluccy45' ||
+          u.username === 'luccyribeiro')
     );
 
   // Helper to load user profile
   const loadUserProfile = (user: UserAccount): AtelieProfile => {
     const isMaster = isMasterUser(user);
+    const effectiveId = isMaster ? '0972b3ad-3498-4eae-9fc2-c2a3c858ed31' : user.id;
     try {
-      const saved = localStorage.getItem(`atelie_profile_${user.id}`);
+      const saved = localStorage.getItem(`atelie_profile_${effectiveId}`) || localStorage.getItem(`atelie_profile_${user.id}`);
       if (saved) return JSON.parse(saved);
     } catch (e) {
       console.error(e);
@@ -171,9 +174,21 @@ export default function App() {
 
   // Helper to load user orders
   const loadUserOrders = (user: UserAccount): Order[] => {
+    const isMaster = isMasterUser(user);
+    const effectiveId = isMaster ? '0972b3ad-3498-4eae-9fc2-c2a3c858ed31' : user.id;
     try {
-      const saved = localStorage.getItem(`atelie_orders_${user.id}`);
-      if (saved) return JSON.parse(saved);
+      const saved = localStorage.getItem(`atelie_orders_${effectiveId}`) || localStorage.getItem(`atelie_orders_${user.id}`);
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        if (Array.isArray(parsed) && parsed.length > 0) return parsed;
+      }
+      if (isMaster) {
+        const alt = localStorage.getItem('atelie_orders_user-sluccy45-master');
+        if (alt) {
+          const parsedAlt = JSON.parse(alt);
+          if (Array.isArray(parsedAlt) && parsedAlt.length > 0) return parsedAlt;
+        }
+      }
     } catch (e) {
       console.error(e);
     }
@@ -182,8 +197,10 @@ export default function App() {
 
   // Helper to load user catalog
   const loadUserCatalog = (user: UserAccount): CatalogItem[] => {
+    const isMaster = isMasterUser(user);
+    const effectiveId = isMaster ? '0972b3ad-3498-4eae-9fc2-c2a3c858ed31' : user.id;
     try {
-      const saved = localStorage.getItem(`atelie_catalog_${user.id}`);
+      const saved = localStorage.getItem(`atelie_catalog_${effectiveId}`) || localStorage.getItem(`atelie_catalog_${user.id}`);
       if (saved) return JSON.parse(saved);
     } catch (e) {
       console.error(e);
@@ -193,8 +210,10 @@ export default function App() {
 
   // Helper to load user catalog categories
   const loadUserCategories = (user: UserAccount): string[] => {
+    const isMaster = isMasterUser(user);
+    const effectiveId = isMaster ? '0972b3ad-3498-4eae-9fc2-c2a3c858ed31' : user.id;
     try {
-      const saved = localStorage.getItem(`atelie_categories_${user.id}`);
+      const saved = localStorage.getItem(`atelie_categories_${effectiveId}`) || localStorage.getItem(`atelie_categories_${user.id}`);
       if (saved) {
         const parsed = JSON.parse(saved);
         if (Array.isArray(parsed) && parsed.length > 0) return parsed;
@@ -207,8 +226,10 @@ export default function App() {
 
   // Helper to load user order types
   const loadUserOrderTypes = (user: UserAccount): string[] => {
+    const isMaster = isMasterUser(user);
+    const effectiveId = isMaster ? '0972b3ad-3498-4eae-9fc2-c2a3c858ed31' : user.id;
     try {
-      const saved = localStorage.getItem(`atelie_order_types_${user.id}`);
+      const saved = localStorage.getItem(`atelie_order_types_${effectiveId}`) || localStorage.getItem(`atelie_order_types_${user.id}`);
       if (saved) {
         const parsed = JSON.parse(saved);
         if (Array.isArray(parsed) && parsed.length > 0) return parsed;
@@ -221,8 +242,10 @@ export default function App() {
 
   // Helper to load user quotations
   const loadUserQuotations = (user: UserAccount): Quotation[] => {
+    const isMaster = isMasterUser(user);
+    const effectiveId = isMaster ? '0972b3ad-3498-4eae-9fc2-c2a3c858ed31' : user.id;
     try {
-      const saved = localStorage.getItem(`atelie_quotations_${user.id}`);
+      const saved = localStorage.getItem(`atelie_quotations_${effectiveId}`) || localStorage.getItem(`atelie_quotations_${user.id}`);
       if (saved) return JSON.parse(saved);
     } catch (e) {
       console.error(e);
@@ -232,8 +255,10 @@ export default function App() {
 
   // Helper to load user clients
   const loadUserClients = (user: UserAccount): Client[] => {
+    const isMaster = isMasterUser(user);
+    const effectiveId = isMaster ? '0972b3ad-3498-4eae-9fc2-c2a3c858ed31' : user.id;
     try {
-      const saved = localStorage.getItem(`atelie_clients_${user.id}`);
+      const saved = localStorage.getItem(`atelie_clients_${effectiveId}`) || localStorage.getItem(`atelie_clients_${user.id}`);
       if (saved) return JSON.parse(saved);
     } catch (e) {
       console.error(e);
@@ -293,9 +318,28 @@ export default function App() {
   // When currentUser changes, reload their profile, orders, catalog, quotations, clients
   useEffect(() => {
     if (currentUser) {
+      const isMaster = isMasterUser(currentUser);
+      const effectiveUserId = isMaster ? '0972b3ad-3498-4eae-9fc2-c2a3c858ed31' : currentUser.id;
+
+      // Auto-heal session ID if admin was stored with placeholder
+      if (isMaster && currentUser.id !== '0972b3ad-3498-4eae-9fc2-c2a3c858ed31') {
+        const healedUser: UserAccount = {
+          ...currentUser,
+          id: '0972b3ad-3498-4eae-9fc2-c2a3c858ed31',
+          isAdmin: true,
+        };
+        setCurrentUser(healedUser);
+        try {
+          sessionStorage.setItem('atelie_tab_active_user_v1', JSON.stringify(healedUser));
+          localStorage.setItem('atelie_current_user_v3', JSON.stringify(healedUser));
+          localStorage.setItem('atelie_active_session_id_v2', healedUser.id);
+          localStorage.setItem('atelie_saved_device_user_v2', JSON.stringify(healedUser));
+        } catch (e) {}
+      }
+
       try {
         localStorage.setItem('atelie_current_user_v3', JSON.stringify(currentUser));
-        localStorage.setItem('atelie_active_session_id_v2', currentUser.id);
+        localStorage.setItem('atelie_active_session_id_v2', effectiveUserId);
         localStorage.setItem('atelie_saved_device_user_v2', JSON.stringify(currentUser));
       } catch (e) {
         console.error(e);
@@ -316,13 +360,14 @@ export default function App() {
 
         try {
           // Perfil e Links Globais
-          const remoteProfile = await supabaseService.getProfile(currentUser.id);
+          const remoteProfile = await supabaseService.getProfile(effectiveUserId);
           if (remoteProfile) {
             setProfile((prev) => ({ ...prev, ...remoteProfile }));
             setCurrentUser((prev) =>
               prev
                 ? {
                     ...prev,
+                    id: remoteProfile.id || prev.id,
                     isAdmin: Boolean(remoteProfile.isAdmin),
                   }
                 : null
@@ -330,57 +375,101 @@ export default function App() {
           }
 
           // Pedidos
-          const remoteOrders = await supabaseService.getOrders(currentUser.id);
-          if (remoteOrders) {
-            setOrders(remoteOrders);
-            try {
-              localStorage.setItem(`atelie_orders_${currentUser.id}`, JSON.stringify(remoteOrders));
-            } catch (e) {}
+          const remoteOrders = await supabaseService.getOrders(effectiveUserId);
+          if (Array.isArray(remoteOrders)) {
+            setOrders((currentLocalOrders) => {
+              if (remoteOrders.length > 0) {
+                // Merge local-only orders to prevent data loss before Supabase writes propagate
+                const remoteIds = new Set(remoteOrders.map((o) => o.id));
+                const localOnly = currentLocalOrders.filter((o) => !remoteIds.has(o.id));
+                if (localOnly.length > 0) {
+                  localOnly.forEach((lo) => supabaseService.saveOrder(effectiveUserId, lo));
+                  const merged = [...localOnly, ...remoteOrders];
+                  try {
+                    localStorage.setItem(`atelie_orders_${effectiveUserId}`, JSON.stringify(merged));
+                  } catch (e) {}
+                  return merged;
+                }
+                try {
+                  localStorage.setItem(`atelie_orders_${effectiveUserId}`, JSON.stringify(remoteOrders));
+                } catch (e) {}
+                return remoteOrders;
+              } else if (currentLocalOrders.length > 0) {
+                // Remote is empty but local has orders: push local orders to Supabase rather than wiping!
+                currentLocalOrders.forEach((lo) => supabaseService.saveOrder(effectiveUserId, lo));
+                return currentLocalOrders;
+              }
+              return remoteOrders;
+            });
           }
 
           // Catálogo
-          const remoteCatalog = await supabaseService.getCatalog(currentUser.id);
-          if (remoteCatalog) {
-            setCatalog(remoteCatalog);
-            try {
-              localStorage.setItem(`atelie_catalog_${currentUser.id}`, JSON.stringify(remoteCatalog));
-            } catch (e) {}
+          const remoteCatalog = await supabaseService.getCatalog(effectiveUserId);
+          if (Array.isArray(remoteCatalog)) {
+            setCatalog((currentLocalCatalog) => {
+              if (remoteCatalog.length > 0) {
+                try {
+                  localStorage.setItem(`atelie_catalog_${effectiveUserId}`, JSON.stringify(remoteCatalog));
+                } catch (e) {}
+                return remoteCatalog;
+              } else if (currentLocalCatalog.length > 0) {
+                currentLocalCatalog.forEach((c) => supabaseService.saveCatalogItem(effectiveUserId, c));
+                return currentLocalCatalog;
+              }
+              return remoteCatalog;
+            });
           }
 
           // Categorias
-          const remoteCats = await supabaseService.getCatalogCategories(currentUser.id);
-          if (remoteCats) {
+          const remoteCats = await supabaseService.getCatalogCategories(effectiveUserId);
+          if (Array.isArray(remoteCats) && remoteCats.length > 0) {
             setCatalogCategories(remoteCats);
             try {
-              localStorage.setItem(`atelie_categories_${currentUser.id}`, JSON.stringify(remoteCats));
+              localStorage.setItem(`atelie_categories_${effectiveUserId}`, JSON.stringify(remoteCats));
             } catch (e) {}
           }
 
           // Tipos de Pedido
-          const remoteTypes = await supabaseService.getOrderTypes(currentUser.id);
-          if (remoteTypes) {
+          const remoteTypes = await supabaseService.getOrderTypes(effectiveUserId);
+          if (Array.isArray(remoteTypes) && remoteTypes.length > 0) {
             setOrderTypes(remoteTypes);
             try {
-              localStorage.setItem(`atelie_order_types_${currentUser.id}`, JSON.stringify(remoteTypes));
+              localStorage.setItem(`atelie_order_types_${effectiveUserId}`, JSON.stringify(remoteTypes));
             } catch (e) {}
           }
 
           // Orçamentos
-          const remoteQuotes = await supabaseService.getQuotations(currentUser.id);
-          if (remoteQuotes) {
-            setQuotations(remoteQuotes);
-            try {
-              localStorage.setItem(`atelie_quotations_${currentUser.id}`, JSON.stringify(remoteQuotes));
-            } catch (e) {}
+          const remoteQuotes = await supabaseService.getQuotations(effectiveUserId);
+          if (Array.isArray(remoteQuotes)) {
+            setQuotations((currentLocalQuotes) => {
+              if (remoteQuotes.length > 0) {
+                try {
+                  localStorage.setItem(`atelie_quotations_${effectiveUserId}`, JSON.stringify(remoteQuotes));
+                } catch (e) {}
+                return remoteQuotes;
+              } else if (currentLocalQuotes.length > 0) {
+                currentLocalQuotes.forEach((q) => supabaseService.saveQuotation(effectiveUserId, q));
+                return currentLocalQuotes;
+              }
+              return remoteQuotes;
+            });
           }
 
           // Clientes
-          const remoteClients = await supabaseService.getClients(currentUser.id);
-          if (remoteClients) {
-            setClients(remoteClients);
-            try {
-              localStorage.setItem(`atelie_clients_${currentUser.id}`, JSON.stringify(remoteClients));
-            } catch (e) {}
+          const remoteClients = await supabaseService.getClients(effectiveUserId);
+          if (Array.isArray(remoteClients)) {
+            setClients((currentLocalClients) => {
+              if (remoteClients.length > 0) {
+                try {
+                  localStorage.setItem(`atelie_clients_${effectiveUserId}`, JSON.stringify(remoteClients));
+                } catch (e) {}
+                return remoteClients;
+              } else if (currentLocalClients.length > 0) {
+                currentLocalClients.forEach((c) => supabaseService.saveClient(effectiveUserId, c));
+                return currentLocalClients;
+              }
+              return remoteClients;
+            });
           }
         } catch (syncErr) {
           console.warn('[Sync] Erro na sincronização com Supabase:', syncErr);
@@ -392,7 +481,7 @@ export default function App() {
 
       // 1. Supabase Realtime WebSockets: Notificação instantânea em menos de 100ms
       const realtimeChannel = supabase
-        .channel(`public:realtime_${currentUser.id}_${Date.now()}`)
+        .channel(`public:realtime_${effectiveUserId}_${Date.now()}`)
         .on(
           'postgres_changes',
           { event: '*', schema: 'public', table: 'profiles' },
@@ -466,7 +555,7 @@ export default function App() {
         }
       };
     }
-  }, [currentUser?.id]);
+  }, [currentUser?.id, currentUser?.email]);
 
   // Save Orders for current user
   useEffect(() => {
@@ -651,20 +740,26 @@ export default function App() {
   const subInfo = getSubscriptionInfo(profile);
 
   // Handler: Save New or Edited Order
-  const handleSaveOrder = (savedOrder: Order) => {
+  const handleSaveOrder = async (savedOrder: Order) => {
     if (!subInfo.canPerformAction) {
       setIsSubscriptionModalOpen(true);
       return;
     }
+
+    const isMaster = isMasterUser(currentUser);
+    const effectiveUserId = isMaster ? '0972b3ad-3498-4eae-9fc2-c2a3c858ed31' : (currentUser?.id || '');
 
     setOrders((prev) => {
       const exists = prev.some((o) => o.id === savedOrder.id);
       const updated = exists
         ? prev.map((o) => (o.id === savedOrder.id ? savedOrder : o))
         : [savedOrder, ...prev];
-      if (currentUser) {
+      if (effectiveUserId) {
         try {
-          localStorage.setItem(`atelie_orders_${currentUser.id}`, JSON.stringify(updated));
+          localStorage.setItem(`atelie_orders_${effectiveUserId}`, JSON.stringify(updated));
+          if (currentUser && currentUser.id !== effectiveUserId) {
+            localStorage.setItem(`atelie_orders_${currentUser.id}`, JSON.stringify(updated));
+          }
         } catch (e) {
           console.error(e);
         }
@@ -673,8 +768,11 @@ export default function App() {
     });
 
     setOrderDraftToCreate(null);
-    if (currentUser && currentUser.id !== 'user-luccy-default') {
-      supabaseService.saveOrder(currentUser.id, savedOrder);
+    if (effectiveUserId && effectiveUserId !== 'user-luccy-default') {
+      const savedOk = await supabaseService.saveOrder(effectiveUserId, savedOrder);
+      if (!savedOk) {
+        console.warn('[handleSaveOrder] Falha ao persistir no Supabase, mantido com segurança no dispositivo local.');
+      }
     }
     setActiveTab('pedidos');
   };
@@ -701,6 +799,9 @@ export default function App() {
       setIsSubscriptionModalOpen(true);
       return;
     }
+    const isMaster = isMasterUser(currentUser);
+    const effectiveUserId = isMaster ? '0972b3ad-3498-4eae-9fc2-c2a3c858ed31' : (currentUser?.id || '');
+
     setOrders((prev) => {
       const target = prev.find((o) => o.id === orderId);
       if (!target) return prev;
@@ -733,17 +834,20 @@ export default function App() {
       const updatedList = prev.map((o) => (o.id === orderId ? updated : o));
 
       // Persist to localStorage immediately
-      if (currentUser) {
+      if (effectiveUserId) {
         try {
-          localStorage.setItem(`atelie_orders_${currentUser.id}`, JSON.stringify(updatedList));
+          localStorage.setItem(`atelie_orders_${effectiveUserId}`, JSON.stringify(updatedList));
+          if (currentUser && currentUser.id !== effectiveUserId) {
+            localStorage.setItem(`atelie_orders_${currentUser.id}`, JSON.stringify(updatedList));
+          }
         } catch (e) {
           console.error('Error saving updated orders to localStorage', e);
         }
       }
 
       // Persist to Supabase immediately for cloud accounts
-      if (currentUser && currentUser.id !== 'user-luccy-default') {
-        supabaseService.saveOrder(currentUser.id, updated);
+      if (effectiveUserId && effectiveUserId !== 'user-luccy-default') {
+        supabaseService.saveOrder(effectiveUserId, updated);
       }
 
       // If status changed to "Em Produção", trigger WhatsApp in-production notification modal
@@ -792,11 +896,17 @@ export default function App() {
 
   // Handler: Delete Order
   const handleDeleteOrder = (orderId: string) => {
+    const isMaster = isMasterUser(currentUser);
+    const effectiveUserId = isMaster ? '0972b3ad-3498-4eae-9fc2-c2a3c858ed31' : (currentUser?.id || '');
+
     setOrders((prev) => {
       const updatedList = prev.filter((o) => o.id !== orderId);
-      if (currentUser) {
+      if (effectiveUserId) {
         try {
-          localStorage.setItem(`atelie_orders_${currentUser.id}`, JSON.stringify(updatedList));
+          localStorage.setItem(`atelie_orders_${effectiveUserId}`, JSON.stringify(updatedList));
+          if (currentUser && currentUser.id !== effectiveUserId) {
+            localStorage.setItem(`atelie_orders_${currentUser.id}`, JSON.stringify(updatedList));
+          }
         } catch (e) {
           console.error(e);
         }
@@ -806,7 +916,7 @@ export default function App() {
     if (selectedOrder && selectedOrder.id === orderId) {
       setSelectedOrder(null);
     }
-    if (currentUser && currentUser.id !== 'user-luccy-default') {
+    if (effectiveUserId && effectiveUserId !== 'user-luccy-default') {
       supabaseService.deleteOrder(orderId);
     }
   };
@@ -817,19 +927,25 @@ export default function App() {
       setIsSubscriptionModalOpen(true);
       return;
     }
+    const isMaster = isMasterUser(currentUser);
+    const effectiveUserId = isMaster ? '0972b3ad-3498-4eae-9fc2-c2a3c858ed31' : (currentUser?.id || '');
+
     setClients((prev) => {
       const updated = [newClient, ...prev];
-      if (currentUser) {
+      if (effectiveUserId) {
         try {
-          localStorage.setItem(`atelie_clients_${currentUser.id}`, JSON.stringify(updated));
+          localStorage.setItem(`atelie_clients_${effectiveUserId}`, JSON.stringify(updated));
+          if (currentUser && currentUser.id !== effectiveUserId) {
+            localStorage.setItem(`atelie_clients_${currentUser.id}`, JSON.stringify(updated));
+          }
         } catch (e) {
           console.error(e);
         }
       }
       return updated;
     });
-    if (currentUser && currentUser.id !== 'user-luccy-default') {
-      supabaseService.saveClient(currentUser.id, newClient);
+    if (effectiveUserId && effectiveUserId !== 'user-luccy-default') {
+      supabaseService.saveClient(effectiveUserId, newClient);
     }
   };
 
@@ -838,19 +954,25 @@ export default function App() {
       setIsSubscriptionModalOpen(true);
       return;
     }
+    const isMaster = isMasterUser(currentUser);
+    const effectiveUserId = isMaster ? '0972b3ad-3498-4eae-9fc2-c2a3c858ed31' : (currentUser?.id || '');
+
     setClients((prev) => {
       const updated = prev.map((c) => (c.id === client.id ? client : c));
-      if (currentUser) {
+      if (effectiveUserId) {
         try {
-          localStorage.setItem(`atelie_clients_${currentUser.id}`, JSON.stringify(updated));
+          localStorage.setItem(`atelie_clients_${effectiveUserId}`, JSON.stringify(updated));
+          if (currentUser && currentUser.id !== effectiveUserId) {
+            localStorage.setItem(`atelie_clients_${currentUser.id}`, JSON.stringify(updated));
+          }
         } catch (e) {
           console.error(e);
         }
       }
       return updated;
     });
-    if (currentUser && currentUser.id !== 'user-luccy-default') {
-      supabaseService.saveClient(currentUser.id, client);
+    if (effectiveUserId && effectiveUserId !== 'user-luccy-default') {
+      supabaseService.saveClient(effectiveUserId, client);
     }
   };
 
@@ -859,18 +981,24 @@ export default function App() {
       setIsSubscriptionModalOpen(true);
       return;
     }
+    const isMaster = isMasterUser(currentUser);
+    const effectiveUserId = isMaster ? '0972b3ad-3498-4eae-9fc2-c2a3c858ed31' : (currentUser?.id || '');
+
     setClients((prev) => {
       const updated = prev.filter((c) => c.id !== clientId);
-      if (currentUser) {
+      if (effectiveUserId) {
         try {
-          localStorage.setItem(`atelie_clients_${currentUser.id}`, JSON.stringify(updated));
+          localStorage.setItem(`atelie_clients_${effectiveUserId}`, JSON.stringify(updated));
+          if (currentUser && currentUser.id !== effectiveUserId) {
+            localStorage.setItem(`atelie_clients_${currentUser.id}`, JSON.stringify(updated));
+          }
         } catch (e) {
           console.error(e);
         }
       }
       return updated;
     });
-    if (currentUser && currentUser.id !== 'user-luccy-default') {
+    if (effectiveUserId && effectiveUserId !== 'user-luccy-default') {
       supabaseService.deleteClient(clientId);
     }
   };
@@ -913,19 +1041,25 @@ export default function App() {
       setIsSubscriptionModalOpen(true);
       return;
     }
+    const isMaster = isMasterUser(currentUser);
+    const effectiveUserId = isMaster ? '0972b3ad-3498-4eae-9fc2-c2a3c858ed31' : (currentUser?.id || '');
+
     setCatalog((prev) => {
       const updated = [item, ...prev];
-      if (currentUser) {
+      if (effectiveUserId) {
         try {
-          localStorage.setItem(`atelie_catalog_${currentUser.id}`, JSON.stringify(updated));
+          localStorage.setItem(`atelie_catalog_${effectiveUserId}`, JSON.stringify(updated));
+          if (currentUser && currentUser.id !== effectiveUserId) {
+            localStorage.setItem(`atelie_catalog_${currentUser.id}`, JSON.stringify(updated));
+          }
         } catch (e) {
           console.error(e);
         }
       }
       return updated;
     });
-    if (currentUser && currentUser.id !== 'user-luccy-default') {
-      supabaseService.saveCatalogItem(currentUser.id, item);
+    if (effectiveUserId && effectiveUserId !== 'user-luccy-default') {
+      supabaseService.saveCatalogItem(effectiveUserId, item);
     }
   };
 
@@ -935,19 +1069,25 @@ export default function App() {
       setIsSubscriptionModalOpen(true);
       return;
     }
+    const isMaster = isMasterUser(currentUser);
+    const effectiveUserId = isMaster ? '0972b3ad-3498-4eae-9fc2-c2a3c858ed31' : (currentUser?.id || '');
+
     setCatalog((prev) => {
       const updated = prev.map((c) => (c.id === item.id ? item : c));
-      if (currentUser) {
+      if (effectiveUserId) {
         try {
-          localStorage.setItem(`atelie_catalog_${currentUser.id}`, JSON.stringify(updated));
+          localStorage.setItem(`atelie_catalog_${effectiveUserId}`, JSON.stringify(updated));
+          if (currentUser && currentUser.id !== effectiveUserId) {
+            localStorage.setItem(`atelie_catalog_${currentUser.id}`, JSON.stringify(updated));
+          }
         } catch (e) {
           console.error(e);
         }
       }
       return updated;
     });
-    if (currentUser && currentUser.id !== 'user-luccy-default') {
-      supabaseService.saveCatalogItem(currentUser.id, item);
+    if (effectiveUserId && effectiveUserId !== 'user-luccy-default') {
+      supabaseService.saveCatalogItem(effectiveUserId, item);
     }
   };
 
@@ -957,18 +1097,24 @@ export default function App() {
       setIsSubscriptionModalOpen(true);
       return;
     }
+    const isMaster = isMasterUser(currentUser);
+    const effectiveUserId = isMaster ? '0972b3ad-3498-4eae-9fc2-c2a3c858ed31' : (currentUser?.id || '');
+
     setCatalog((prev) => {
       const updated = prev.filter((c) => c.id !== itemId);
-      if (currentUser) {
+      if (effectiveUserId) {
         try {
-          localStorage.setItem(`atelie_catalog_${currentUser.id}`, JSON.stringify(updated));
+          localStorage.setItem(`atelie_catalog_${effectiveUserId}`, JSON.stringify(updated));
+          if (currentUser && currentUser.id !== effectiveUserId) {
+            localStorage.setItem(`atelie_catalog_${currentUser.id}`, JSON.stringify(updated));
+          }
         } catch (e) {
           console.error(e);
         }
       }
       return updated;
     });
-    if (currentUser && currentUser.id !== 'user-luccy-default') {
+    if (effectiveUserId && effectiveUserId !== 'user-luccy-default') {
       supabaseService.deleteCatalogItem(itemId);
     }
   };
@@ -979,16 +1125,22 @@ export default function App() {
     renamedMap?: { oldName: string; newName: string },
     deletedCategory?: string
   ) => {
+    const isMaster = isMasterUser(currentUser);
+    const effectiveUserId = isMaster ? '0972b3ad-3498-4eae-9fc2-c2a3c858ed31' : (currentUser?.id || '');
+
     setCatalogCategories(newCategories);
 
-    if (currentUser) {
+    if (effectiveUserId) {
       try {
-        localStorage.setItem(`atelie_categories_${currentUser.id}`, JSON.stringify(newCategories));
+        localStorage.setItem(`atelie_categories_${effectiveUserId}`, JSON.stringify(newCategories));
+        if (currentUser && currentUser.id !== effectiveUserId) {
+          localStorage.setItem(`atelie_categories_${currentUser.id}`, JSON.stringify(newCategories));
+        }
       } catch (e) {
         console.error(e);
       }
-      if (currentUser.id !== 'user-luccy-default') {
-        supabaseService.saveCatalogCategories(currentUser.id, newCategories);
+      if (effectiveUserId !== 'user-luccy-default') {
+        supabaseService.saveCatalogCategories(effectiveUserId, newCategories);
       }
     }
 
@@ -997,14 +1149,14 @@ export default function App() {
         const updated = prev.map((item) =>
           item.category === renamedMap.oldName ? { ...item, category: renamedMap.newName } : item
         );
-        if (currentUser) {
+        if (effectiveUserId) {
           try {
-            localStorage.setItem(`atelie_catalog_${currentUser.id}`, JSON.stringify(updated));
+            localStorage.setItem(`atelie_catalog_${effectiveUserId}`, JSON.stringify(updated));
           } catch (e) {}
-          if (currentUser.id !== 'user-luccy-default') {
+          if (effectiveUserId !== 'user-luccy-default') {
             updated.forEach((item) => {
               if (item.category === renamedMap.newName) {
-                supabaseService.saveCatalogItem(currentUser.id, item);
+                supabaseService.saveCatalogItem(effectiveUserId, item);
               }
             });
           }
@@ -1019,14 +1171,14 @@ export default function App() {
         const updated = prev.map((item) =>
           item.category === deletedCategory ? { ...item, category: fallbackCat } : item
         );
-        if (currentUser) {
+        if (effectiveUserId) {
           try {
-            localStorage.setItem(`atelie_catalog_${currentUser.id}`, JSON.stringify(updated));
+            localStorage.setItem(`atelie_catalog_${effectiveUserId}`, JSON.stringify(updated));
           } catch (e) {}
-          if (currentUser.id !== 'user-luccy-default') {
+          if (effectiveUserId !== 'user-luccy-default') {
             updated.forEach((item) => {
               if (item.category === fallbackCat) {
-                supabaseService.saveCatalogItem(currentUser.id, item);
+                supabaseService.saveCatalogItem(effectiveUserId, item);
               }
             });
           }
@@ -1042,15 +1194,21 @@ export default function App() {
     renamedMap?: { oldName: string; newName: string },
     deletedType?: string
   ) => {
+    const isMaster = isMasterUser(currentUser);
+    const effectiveUserId = isMaster ? '0972b3ad-3498-4eae-9fc2-c2a3c858ed31' : (currentUser?.id || '');
+
     setOrderTypes(newTypes);
-    if (currentUser) {
+    if (effectiveUserId) {
       try {
-        localStorage.setItem(`atelie_order_types_${currentUser.id}`, JSON.stringify(newTypes));
+        localStorage.setItem(`atelie_order_types_${effectiveUserId}`, JSON.stringify(newTypes));
+        if (currentUser && currentUser.id !== effectiveUserId) {
+          localStorage.setItem(`atelie_order_types_${currentUser.id}`, JSON.stringify(newTypes));
+        }
       } catch (e) {
         console.error(e);
       }
-      if (currentUser.id !== 'user-luccy-default') {
-        supabaseService.saveOrderTypes(currentUser.id, newTypes);
+      if (effectiveUserId !== 'user-luccy-default') {
+        supabaseService.saveOrderTypes(effectiveUserId, newTypes);
       }
     }
   };
@@ -1066,20 +1224,26 @@ export default function App() {
       setIsSubscriptionModalOpen(true);
       return;
     }
+    const isMaster = isMasterUser(currentUser);
+    const effectiveUserId = isMaster ? '0972b3ad-3498-4eae-9fc2-c2a3c858ed31' : (currentUser?.id || '');
+
     setQuotations((prev) => {
       const exists = prev.some((q) => q.id === quote.id);
       const updated = exists ? prev.map((q) => (q.id === quote.id ? quote : q)) : [quote, ...prev];
-      if (currentUser) {
+      if (effectiveUserId) {
         try {
-          localStorage.setItem(`atelie_quotations_${currentUser.id}`, JSON.stringify(updated));
+          localStorage.setItem(`atelie_quotations_${effectiveUserId}`, JSON.stringify(updated));
+          if (currentUser && currentUser.id !== effectiveUserId) {
+            localStorage.setItem(`atelie_quotations_${currentUser.id}`, JSON.stringify(updated));
+          }
         } catch (e) {
           console.error(e);
         }
       }
       return updated;
     });
-    if (currentUser && currentUser.id !== 'user-luccy-default') {
-      supabaseService.saveQuotation(currentUser.id, quote);
+    if (effectiveUserId && effectiveUserId !== 'user-luccy-default') {
+      supabaseService.saveQuotation(effectiveUserId, quote);
     }
   };
 
@@ -1089,18 +1253,24 @@ export default function App() {
       setIsSubscriptionModalOpen(true);
       return;
     }
+    const isMaster = isMasterUser(currentUser);
+    const effectiveUserId = isMaster ? '0972b3ad-3498-4eae-9fc2-c2a3c858ed31' : (currentUser?.id || '');
+
     setQuotations((prev) => {
       const updated = prev.filter((q) => q.id !== quoteId);
-      if (currentUser) {
+      if (effectiveUserId) {
         try {
-          localStorage.setItem(`atelie_quotations_${currentUser.id}`, JSON.stringify(updated));
+          localStorage.setItem(`atelie_quotations_${effectiveUserId}`, JSON.stringify(updated));
+          if (currentUser && currentUser.id !== effectiveUserId) {
+            localStorage.setItem(`atelie_quotations_${currentUser.id}`, JSON.stringify(updated));
+          }
         } catch (e) {
           console.error(e);
         }
       }
       return updated;
     });
-    if (currentUser && currentUser.id !== 'user-luccy-default') {
+    if (effectiveUserId && effectiveUserId !== 'user-luccy-default') {
       supabaseService.deleteQuotation(quoteId);
     }
   };
@@ -1111,6 +1281,9 @@ export default function App() {
       setIsSubscriptionModalOpen(true);
       return;
     }
+    const isMaster = isMasterUser(currentUser);
+    const effectiveUserId = isMaster ? '0972b3ad-3498-4eae-9fc2-c2a3c858ed31' : (currentUser?.id || '');
+
     if (quoteId) {
       setQuotations((prev) => {
         const updated = prev.map((q) =>
@@ -1118,13 +1291,13 @@ export default function App() {
             ? { ...q, status: 'Aprovado' as const, updatedAt: new Date().toISOString() }
             : q
         );
-        if (currentUser) {
+        if (effectiveUserId) {
           try {
-            localStorage.setItem(`atelie_quotations_${currentUser.id}`, JSON.stringify(updated));
+            localStorage.setItem(`atelie_quotations_${effectiveUserId}`, JSON.stringify(updated));
           } catch (e) {}
-          if (currentUser.id !== 'user-luccy-default') {
+          if (effectiveUserId !== 'user-luccy-default') {
             const found = updated.find((q) => q.id === quoteId);
-            if (found) supabaseService.saveQuotation(currentUser.id, found);
+            if (found) supabaseService.saveQuotation(effectiveUserId, found);
           }
         }
         return updated;

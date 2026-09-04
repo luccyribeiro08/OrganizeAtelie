@@ -1,15 +1,37 @@
 import { supabase } from '../lib/supabaseClient';
 import { AtelieProfile, CatalogItem, Client, Order, Quotation } from '../types';
 
+export const MASTER_ADMIN_ID = '0972b3ad-3498-4eae-9fc2-c2a3c858ed31';
+export const MASTER_ADMIN_EMAIL = 'sluccy45@gmail.com';
+
+export function resolveEffectiveUserId(userId?: string | null): string {
+  if (!userId) return MASTER_ADMIN_ID;
+  const clean = String(userId).trim().toLowerCase();
+  if (
+    clean === 'user-sluccy45-master' ||
+    clean === 'sluccy45' ||
+    clean === 'sluccy' ||
+    clean === 'luccyribeiro' ||
+    clean === 'sluccy45@gmail.com' ||
+    clean === MASTER_ADMIN_ID.toLowerCase()
+  ) {
+    return MASTER_ADMIN_ID;
+  }
+  return userId;
+}
+
 export const supabaseService = {
   // --- PROFILES ---
   async getProfile(userId: string): Promise<AtelieProfile | null> {
     try {
-      const { data, error } = await supabase
-        .from('profiles')
-        .select('*')
-        .eq('id', userId)
-        .single();
+      const effectiveId = resolveEffectiveUserId(userId);
+      let query = supabase.from('profiles').select('*');
+      if (effectiveId === MASTER_ADMIN_ID) {
+        query = query.or(`id.eq.${MASTER_ADMIN_ID},email.ilike.${MASTER_ADMIN_EMAIL}`);
+      } else {
+        query = query.eq('id', effectiveId);
+      }
+      const { data, error } = await query.limit(1).maybeSingle();
       if (error || !data) return null;
 
       // Default trial to 7 days from creation if not set
@@ -37,7 +59,7 @@ export const supabaseService = {
         subscriptionStatus: data.subscription_status || 'trial',
         subscriptionPlan: data.subscription_plan || 'free_trial',
         subscriptionExpiresAt: data.subscription_expires_at || undefined,
-        isAdmin: (data.email && data.email.trim().toLowerCase() === 'sluccy45@gmail.com') || (Boolean(data.is_admin) && data.email && data.email.trim().toLowerCase() === 'sluccy45@gmail.com'),
+        isAdmin: (data.email && data.email.trim().toLowerCase() === MASTER_ADMIN_EMAIL) || Boolean(data.is_admin),
         mercadoPagoLinks: data.mercado_pago_links || {
           mensal: '',
           trimestral: '',
@@ -55,8 +77,9 @@ export const supabaseService = {
 
   async saveProfile(userId: string, profile: AtelieProfile): Promise<boolean> {
     try {
+      const effectiveId = resolveEffectiveUserId(userId || profile.id);
       const { error } = await supabase.from('profiles').upsert({
-        id: userId,
+        id: effectiveId,
         name: profile.ownerName,
         atelie_name: profile.name,
         username: profile.username || null,
@@ -77,6 +100,9 @@ export const supabaseService = {
         mercado_pago_links: profile.mercadoPagoLinks,
         updated_at: new Date().toISOString(),
       });
+      if (error) {
+        console.error('[supabaseService] Error saving profile:', error);
+      }
       return !error;
     } catch (e) {
       console.error('Error saving profile to Supabase', e);
@@ -87,13 +113,18 @@ export const supabaseService = {
   // --- ORDERS ---
   async getOrders(userId: string): Promise<Order[]> {
     try {
+      const effectiveId = resolveEffectiveUserId(userId);
       const { data, error } = await supabase
         .from('orders')
         .select('*')
-        .eq('user_id', userId)
+        .eq('user_id', effectiveId)
         .order('order_date', { ascending: false });
 
-      if (error || !data) return [];
+      if (error) {
+        console.error('[supabaseService] Error fetching orders:', error);
+        return [];
+      }
+      if (!data) return [];
       return data.map((d: any) => ({
         id: d.id,
         code: d.code,
@@ -124,9 +155,10 @@ export const supabaseService = {
 
   async saveOrder(userId: string, order: Order): Promise<boolean> {
     try {
+      const effectiveId = resolveEffectiveUserId(userId);
       const { error } = await supabase.from('orders').upsert({
         id: order.id,
-        user_id: userId,
+        user_id: effectiveId,
         code: order.code,
         client_name: order.clientName,
         client_phone: order.clientPhone,
@@ -146,7 +178,11 @@ export const supabaseService = {
         mockup_images: order.mockupImages,
         updated_at: new Date().toISOString(),
       });
-      return !error;
+      if (error) {
+        console.error('[supabaseService] Error saving order to Supabase:', error);
+        return false;
+      }
+      return true;
     } catch (e) {
       console.error('Error saving order to Supabase', e);
       return false;
@@ -156,6 +192,9 @@ export const supabaseService = {
   async deleteOrder(orderId: string): Promise<boolean> {
     try {
       const { error } = await supabase.from('orders').delete().eq('id', orderId);
+      if (error) {
+        console.error('[supabaseService] Error deleting order:', error);
+      }
       return !error;
     } catch (e) {
       console.error('Error deleting order from Supabase', e);
@@ -166,10 +205,11 @@ export const supabaseService = {
   // --- CATALOG ---
   async getCatalog(userId: string): Promise<CatalogItem[]> {
     try {
+      const effectiveId = resolveEffectiveUserId(userId);
       const { data, error } = await supabase
         .from('catalog')
         .select('*')
-        .eq('user_id', userId)
+        .eq('user_id', effectiveId)
         .order('created_at', { ascending: false });
 
       if (error || !data) return [];
@@ -191,9 +231,10 @@ export const supabaseService = {
 
   async saveCatalogItem(userId: string, item: CatalogItem): Promise<boolean> {
     try {
+      const effectiveId = resolveEffectiveUserId(userId);
       const { error } = await supabase.from('catalog').upsert({
         id: item.id,
-        user_id: userId,
+        user_id: effectiveId,
         name: item.name,
         category: item.category,
         description: item.description,
@@ -202,6 +243,9 @@ export const supabaseService = {
         image_url: item.imageUrl,
         tags: item.tags,
       });
+      if (error) {
+        console.error('[supabaseService] Error saving catalog item:', error);
+      }
       return !error;
     } catch (e) {
       console.error('Error saving catalog item to Supabase', e);
@@ -222,10 +266,11 @@ export const supabaseService = {
   // --- CATALOG CATEGORIES ---
   async getCatalogCategories(userId: string): Promise<string[]> {
     try {
+      const effectiveId = resolveEffectiveUserId(userId);
       const { data, error } = await supabase
         .from('catalog_categories')
         .select('name')
-        .eq('user_id', userId)
+        .eq('user_id', effectiveId)
         .order('created_at', { ascending: true });
 
       if (error || !data || data.length === 0) return [];
@@ -238,12 +283,13 @@ export const supabaseService = {
 
   async saveCatalogCategories(userId: string, categories: string[]): Promise<boolean> {
     try {
+      const effectiveId = resolveEffectiveUserId(userId);
       const rows = categories.map((cat, idx) => ({
-        id: `cat-grp-${userId}-${idx}-${cat.toLowerCase().replace(/[^a-z0-9]/g, '')}`,
-        user_id: userId,
+        id: `cat-grp-${effectiveId}-${idx}-${cat.toLowerCase().replace(/[^a-z0-9]/g, '')}`,
+        user_id: effectiveId,
         name: cat,
       }));
-      await supabase.from('catalog_categories').delete().eq('user_id', userId);
+      await supabase.from('catalog_categories').delete().eq('user_id', effectiveId);
       if (rows.length > 0) {
         const { error } = await supabase.from('catalog_categories').insert(rows);
         return !error;
@@ -258,10 +304,11 @@ export const supabaseService = {
   // --- ORDER TYPES ---
   async getOrderTypes(userId: string): Promise<string[]> {
     try {
+      const effectiveId = resolveEffectiveUserId(userId);
       const { data, error } = await supabase
         .from('order_types')
         .select('name')
-        .eq('user_id', userId)
+        .eq('user_id', effectiveId)
         .order('created_at', { ascending: true });
 
       if (error || !data || data.length === 0) return [];
@@ -274,12 +321,13 @@ export const supabaseService = {
 
   async saveOrderTypes(userId: string, orderTypes: string[]): Promise<boolean> {
     try {
+      const effectiveId = resolveEffectiveUserId(userId);
       const rows = orderTypes.map((typ, idx) => ({
-        id: `ord-typ-${userId}-${idx}-${typ.toLowerCase().replace(/[^a-z0-9]/g, '')}`,
-        user_id: userId,
+        id: `ord-typ-${effectiveId}-${idx}-${typ.toLowerCase().replace(/[^a-z0-9]/g, '')}`,
+        user_id: effectiveId,
         name: typ,
       }));
-      await supabase.from('order_types').delete().eq('user_id', userId);
+      await supabase.from('order_types').delete().eq('user_id', effectiveId);
       if (rows.length > 0) {
         const { error } = await supabase.from('order_types').insert(rows);
         return !error;
@@ -294,10 +342,11 @@ export const supabaseService = {
   // --- QUOTATIONS ---
   async getQuotations(userId: string): Promise<Quotation[]> {
     try {
+      const effectiveId = resolveEffectiveUserId(userId);
       const { data, error } = await supabase
         .from('quotations')
         .select('*')
-        .eq('user_id', userId)
+        .eq('user_id', effectiveId)
         .order('created_at', { ascending: false });
 
       if (error || !data) return [];
@@ -331,9 +380,10 @@ export const supabaseService = {
 
   async saveQuotation(userId: string, quote: Quotation): Promise<boolean> {
     try {
+      const effectiveId = resolveEffectiveUserId(userId);
       const { error } = await supabase.from('quotations').upsert({
         id: quote.id,
-        user_id: userId,
+        user_id: effectiveId,
         code: quote.code,
         client_name: quote.clientName,
         client_phone: quote.clientPhone,
@@ -353,6 +403,9 @@ export const supabaseService = {
         status: quote.status,
         updated_at: new Date().toISOString(),
       });
+      if (error) {
+        console.error('[supabaseService] Error saving quotation:', error);
+      }
       return !error;
     } catch (e) {
       console.error('Error saving quotation to Supabase', e);
@@ -373,10 +426,11 @@ export const supabaseService = {
   // --- CLIENTS ---
   async getClients(userId: string): Promise<Client[]> {
     try {
+      const effectiveId = resolveEffectiveUserId(userId);
       const { data, error } = await supabase
         .from('clients')
         .select('*')
-        .eq('user_id', userId)
+        .eq('user_id', effectiveId)
         .order('name', { ascending: true });
 
       if (error || !data) return [];
@@ -406,9 +460,10 @@ export const supabaseService = {
 
   async saveClient(userId: string, client: Client): Promise<boolean> {
     try {
+      const effectiveId = resolveEffectiveUserId(userId);
       const { error } = await supabase.from('clients').upsert({
         id: client.id,
-        user_id: userId,
+        user_id: effectiveId,
         name: client.name,
         phone: client.phone,
         instagram: client.instagram,
@@ -424,6 +479,9 @@ export const supabaseService = {
         notes: client.notes,
         updated_at: new Date().toISOString(),
       });
+      if (error) {
+        console.error('[supabaseService] Error saving client:', error);
+      }
       return !error;
     } catch (e) {
       console.error('Error saving client to Supabase', e);
@@ -611,12 +669,13 @@ export const supabaseService = {
 
     // 3. Salva no Supabase profiles usando upsert (fallback direto)
     try {
+      const effectiveAdminId = resolveEffectiveUserId(adminUserId);
       await supabase.from('profiles').upsert({
-        id: adminUserId || 'user-sluccy45-master',
-        email: 'sluccy45@gmail.com',
+        id: effectiveAdminId,
+        email: MASTER_ADMIN_EMAIL,
         name: 'Luccy Ribeiro',
         atelie_name: 'Organize Ateliê - Luccy Ribeiro',
-        username: 'sluccy45',
+        username: 'luccyribeiro',
         is_admin: true,
         subscription_status: 'active',
         subscription_plan: 'vitalicio',

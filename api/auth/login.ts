@@ -48,11 +48,12 @@ export default async function handler(req: any, res: any) {
 
     const cleanInput = String(identifier).trim().toLowerCase().replace(/^@/, '');
 
-    // 1. VERIFICAÇÃO ADMINISTRADORA MASTER (sluccy45@gmail.com ou @sluccy45)
+    // 1. VERIFICAÇÃO ADMINISTRADORA MASTER (sluccy45@gmail.com ou @sluccy45 / @luccyribeiro)
     if (
       cleanInput === 'sluccy45@gmail.com' ||
       cleanInput === 'sluccy45' ||
-      cleanInput === 'sluccy'
+      cleanInput === 'sluccy' ||
+      cleanInput === 'luccyribeiro'
     ) {
       const isMasterKey =
         password === 'P@ris1303' ||
@@ -61,23 +62,41 @@ export default async function handler(req: any, res: any) {
         password === 'sluccy45';
 
       let isAuthOk = false;
+      let supaUserId = '0972b3ad-3498-4eae-9fc2-c2a3c858ed31';
+      let existingAdminProf: any = null;
       try {
         const { data: supaAuth } = await supabaseAdmin.auth.signInWithPassword({
           email: 'sluccy45@gmail.com',
           password: password,
         });
-        if (supaAuth?.user) isAuthOk = true;
+        if (supaAuth?.user) {
+          isAuthOk = true;
+          supaUserId = supaAuth.user.id;
+        }
+      } catch {}
+
+      try {
+        const { data: prof } = await supabaseAdmin
+          .from('profiles')
+          .select('*')
+          .or('email.ilike.sluccy45@gmail.com,is_admin.eq.true,username.ilike.luccyribeiro')
+          .limit(1)
+          .maybeSingle();
+        if (prof?.id) {
+          supaUserId = prof.id;
+          existingAdminProf = prof;
+        }
       } catch {}
 
       if (isMasterKey || isAuthOk) {
         // Garante que o perfil master esteja sincronizado no Supabase
         await supabaseAdmin.from('profiles').upsert({
-          id: 'user-sluccy45-master',
-          name: 'Luccy Ribeiro',
-          atelie_name: 'Organize Ateliê - Luccy Ribeiro',
-          username: 'sluccy45',
+          id: supaUserId,
+          name: existingAdminProf?.name || 'Luccy Ribeiro',
+          atelie_name: existingAdminProf?.atelie_name || 'Organize Ateliê - Luccy Ribeiro',
+          username: existingAdminProf?.username || 'luccyribeiro',
           email: 'sluccy45@gmail.com',
-          phone: '(11) 98765-4321',
+          phone: existingAdminProf?.phone || '(11) 98765-4321',
           is_admin: true,
           subscription_status: 'active',
           subscription_plan: 'vitalicio',
@@ -88,17 +107,17 @@ export default async function handler(req: any, res: any) {
         return res.status(200).json({
           success: true,
           user: {
-            id: 'user-sluccy45-master',
-            name: 'Luccy Ribeiro',
-            atelieName: 'Organize Ateliê - Luccy Ribeiro',
-            username: 'sluccy45',
+            id: supaUserId,
+            name: existingAdminProf?.name || 'Luccy Ribeiro',
+            atelieName: existingAdminProf?.atelie_name || 'Organize Ateliê - Luccy Ribeiro',
+            username: existingAdminProf?.username || 'luccyribeiro',
             email: 'sluccy45@gmail.com',
             password: password,
-            phone: '(11) 98765-4321',
+            phone: existingAdminProf?.phone || '(11) 98765-4321',
             role: 'Administrador Master',
-            avatarUrl: '/logo.png',
-            logoUrl: '/logo.png',
-            createdAt: '2026-01-01T00:00:00Z',
+            avatarUrl: existingAdminProf?.avatar_url || '/logo.png',
+            logoUrl: existingAdminProf?.logo_url || '/logo.png',
+            createdAt: existingAdminProf?.created_at || '2026-01-01T00:00:00Z',
             isAdmin: true,
             subscriptionStatus: 'active',
             subscriptionPlan: 'vitalicio',

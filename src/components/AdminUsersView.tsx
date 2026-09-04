@@ -75,7 +75,7 @@ export const AdminUsersView: React.FC<AdminUsersViewProps> = ({
 
   const handleSaveMpLinks = async (e: React.FormEvent) => {
     e.preventDefault();
-    const adminId = currentAdminProfile.id || 'user-sluccy45-master';
+    const adminId = currentAdminProfile.id || '0972b3ad-3498-4eae-9fc2-c2a3c858ed31';
     setSavingLinks(true);
 
     const success = await supabaseService.saveAdminMercadoPagoLinks(adminId, mpLinks);

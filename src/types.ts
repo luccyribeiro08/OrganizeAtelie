@@ -106,9 +106,10 @@ export interface Quotation {
   clientPhone?: string;
   theme: string;
   materials: MaterialCostItem[];
-  laborCost: number; // Mão de obra fixa (R$)
-  laborHours?: number;
-  hourlyRate?: number;
+  laborCost: number; // Mão de obra (R$)
+  laborHours?: number; // Horas de produção
+  laborMinutes?: number; // Minutos de produção
+  hourlyRate?: number; // Valor da hora da artesã (R$/h)
   additionalCosts: number;
   profitMargin: number; // %
   calculatedPrice: number;

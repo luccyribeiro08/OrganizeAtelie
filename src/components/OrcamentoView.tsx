@@ -60,7 +60,10 @@ export const OrcamentoView: React.FC<OrcamentoViewProps> = ({
   // Materials Breakdown
   const [materials, setMaterials] = useState<MaterialCostItem[]>([]);
 
-  // Labor - Fixed user-defined value
+  // Production Time & Labor Cost State
+  const [laborHours, setLaborHours] = useState<number>(1);
+  const [laborMinutes, setLaborMinutes] = useState<number>(15);
+  const [hourlyRate, setHourlyRate] = useState<number>(20.0);
   const [laborCost, setLaborCost] = useState<number>(25.0);
 
   // Overhead & Extras
@@ -72,13 +75,38 @@ export const OrcamentoView: React.FC<OrcamentoViewProps> = ({
   // Success Feedback state
   const [saveSuccessMessage, setSaveSuccessMessage] = useState<string | null>(null);
 
-  // Calculation Math with Cent Precision
+  // Production Time & Calculation Math
+  const totalLaborHours = (laborHours || 0) + (laborMinutes || 0) / 60;
+  const calculatedLaborCost = roundCurrency(totalLaborHours * (hourlyRate || 0));
+
   const totalMaterialsCost = roundCurrency(materials.reduce((acc, m) => acc + (m.unitCost || 0) * (m.quantityUsed || 0), 0));
   const materialsAndExtrasCost = roundCurrency(totalMaterialsCost + (additionalCosts || 0));
-  const profitValue = roundCurrency(materialsAndExtrasCost * (profitMargin / 100));
-  const calculatedPrice = roundCurrency(materialsAndExtrasCost + profitValue + (laborCost || 0));
-  const roundedPrice = calculatedPrice;
   const baseCost = roundCurrency(materialsAndExtrasCost + (laborCost || 0));
+  const profitValue = roundCurrency(baseCost * (profitMargin / 100));
+  const calculatedPrice = roundCurrency(baseCost + profitValue);
+  const roundedPrice = calculatedPrice;
+
+  // Sync helper when time or rate changes
+  const handleUpdateTime = (newHours: number, newMinutes: number, newRate: number = hourlyRate) => {
+    const validHours = Math.max(0, isNaN(newHours) ? 0 : newHours);
+    const validMinutes = Math.max(0, Math.min(59, isNaN(newMinutes) ? 0 : newMinutes));
+    setLaborHours(validHours);
+    setLaborMinutes(validMinutes);
+    setHourlyRate(newRate);
+    const cost = roundCurrency((validHours + validMinutes / 60) * newRate);
+    setLaborCost(cost);
+  };
+
+  const handleUpdateHourlyRate = (newRate: number) => {
+    const validRate = Math.max(0, isNaN(newRate) ? 0 : newRate);
+    setHourlyRate(validRate);
+    const cost = roundCurrency(totalLaborHours * validRate);
+    setLaborCost(cost);
+  };
+
+  const handleSetQuickTime = (hours: number, minutes: number) => {
+    handleUpdateTime(hours, minutes, hourlyRate);
+  };
 
   const handleAddMaterial = () => {
     setMaterials((prev) => [
@@ -104,6 +132,9 @@ export const OrcamentoView: React.FC<OrcamentoViewProps> = ({
       { id: 'm6', name: 'Embalagem Celofane e Tag', unitCost: 1.00, quantityUsed: 1, subtotal: 1.00 },
     ]);
     setAdditionalCosts(3.0);
+    setLaborHours(1);
+    setLaborMinutes(15);
+    setHourlyRate(20.0);
     setLaborCost(25.0);
   };
 
@@ -128,6 +159,9 @@ export const OrcamentoView: React.FC<OrcamentoViewProps> = ({
     setTheme('');
     setNotes('');
     setMaterials([]);
+    setLaborHours(1);
+    setLaborMinutes(15);
+    setHourlyRate(20.0);
     setLaborCost(25.0);
     setAdditionalCosts(0.0);
     setProfitMargin(40);
@@ -143,7 +177,16 @@ export const OrcamentoView: React.FC<OrcamentoViewProps> = ({
     setNotes(quote.notes || '');
     setValidDays(quote.validDays || 7);
     setMaterials(quote.materials || []);
-    setLaborCost(quote.laborCost ?? 25.0);
+
+    const loadedHourlyRate = quote.hourlyRate && quote.hourlyRate > 0 ? quote.hourlyRate : 20.0;
+    const loadedHours = quote.laborHours !== undefined ? quote.laborHours : (quote.laborCost ? Math.floor(quote.laborCost / loadedHourlyRate) : 1);
+    const loadedMinutes = quote.laborMinutes !== undefined ? quote.laborMinutes : (quote.laborCost ? Math.round(((quote.laborCost / loadedHourlyRate) - loadedHours) * 60) : 15);
+    const loadedLaborCost = quote.laborCost ?? 25.0;
+
+    setLaborHours(loadedHours);
+    setLaborMinutes(loadedMinutes);
+    setHourlyRate(loadedHourlyRate);
+    setLaborCost(loadedLaborCost);
     setAdditionalCosts(quote.additionalCosts || 0);
     setProfitMargin(quote.profitMargin || 40);
     setActiveSubTab('calculadora');
@@ -169,6 +212,9 @@ export const OrcamentoView: React.FC<OrcamentoViewProps> = ({
       theme: theme.trim() || 'Papelaria Personalizada',
       materials,
       laborCost,
+      laborHours,
+      laborMinutes,
+      hourlyRate,
       additionalCosts,
       profitMargin,
       calculatedPrice,
@@ -543,42 +589,215 @@ export const OrcamentoView: React.FC<OrcamentoViewProps> = ({
               )}
             </div>
 
-            {/* Mão de Obra & Custos Fixos */}
-            <div className="bg-white rounded-3xl p-6 sm:p-8 shadow-atelie border border-pink-100/70 space-y-4">
-              <h2 className="text-sm font-bold uppercase tracking-wider text-slate-700">
-                Mão de Obra & Custos Adicionais
-              </h2>
+            {/* Mão de Obra & Custos Adicionais */}
+            <div className="bg-white rounded-3xl p-6 sm:p-8 shadow-atelie border border-pink-100/70 space-y-6">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 pb-3 border-b border-pink-100/60">
+                <div className="flex items-center gap-3">
+                  <div className="w-9 h-9 rounded-2xl bg-pink-100/70 flex items-center justify-center text-[#ac2471]">
+                    <Clock className="w-4 h-4" />
+                  </div>
+                  <div>
+                    <h2 className="text-sm font-bold uppercase tracking-wider text-slate-800 font-heading">
+                      Mão de Obra & Custos Adicionais
+                    </h2>
+                    <p className="text-[11px] text-slate-500">
+                      Calculado automaticamente com base no tempo de produção e valor da sua hora.
+                    </p>
+                  </div>
+                </div>
 
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                <div>
-                  <label className="block text-[11px] font-bold text-slate-500 uppercase mb-1">
-                    VALOR DA MÃO DE OBRA FIXO (R$)
+                <div className="flex items-center gap-1.5 px-3 py-1 bg-pink-50 text-[#ac2471] rounded-full text-xs font-bold self-start sm:self-auto">
+                  <Sparkles className="w-3.5 h-3.5" />
+                  <span>Cálculo Automático</span>
+                </div>
+              </div>
+
+              {/* Grid: Tempo de Produção + Valor da Hora */}
+              <div className="grid grid-cols-1 md:grid-cols-12 gap-5">
+                {/* Tempo de Produção (7 cols) */}
+                <div className="md:col-span-7 space-y-3 bg-[#faf7f8] p-4 sm:p-5 rounded-2xl border border-pink-100/80">
+                  <label className="block text-[11px] font-bold text-slate-700 uppercase flex items-center gap-1.5">
+                    <Clock className="w-3.5 h-3.5 text-[#ac2471]" />
+                    <span>Tempo de Produção da Artesã</span>
                   </label>
+
+                  <div className="grid grid-cols-2 gap-3">
+                    <div>
+                      <span className="text-[10px] font-bold text-slate-500 uppercase block mb-1">Horas</span>
+                      <div className="relative">
+                        <input
+                          type="number"
+                          min="0"
+                          max="100"
+                          step="1"
+                          value={laborHours === 0 ? '' : laborHours}
+                          onChange={(e) => {
+                            const val = e.target.value === '' ? 0 : parseInt(e.target.value);
+                            handleUpdateTime(val, laborMinutes);
+                          }}
+                          className="w-full px-3.5 py-2.5 bg-white border border-[#f0e4e8] rounded-xl text-xs font-bold text-slate-800 focus:outline-hidden focus:border-[#ac2471] text-center"
+                          placeholder="0"
+                        />
+                        <span className="absolute right-3 top-1/2 -translate-y-1/2 text-[11px] font-bold text-slate-400 pointer-events-none">
+                          h
+                        </span>
+                      </div>
+                    </div>
+
+                    <div>
+                      <span className="text-[10px] font-bold text-slate-500 uppercase block mb-1">Minutos</span>
+                      <div className="relative">
+                        <input
+                          type="number"
+                          min="0"
+                          max="59"
+                          step="5"
+                          value={laborMinutes === 0 ? '' : laborMinutes}
+                          onChange={(e) => {
+                            const val = e.target.value === '' ? 0 : parseInt(e.target.value);
+                            handleUpdateTime(laborHours, val);
+                          }}
+                          className="w-full px-3.5 py-2.5 bg-white border border-[#f0e4e8] rounded-xl text-xs font-bold text-slate-800 focus:outline-hidden focus:border-[#ac2471] text-center"
+                          placeholder="0"
+                        />
+                        <span className="absolute right-3 top-1/2 -translate-y-1/2 text-[11px] font-bold text-slate-400 pointer-events-none">
+                          min
+                        </span>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Atalhos Rápidos de Tempo */}
+                  <div className="space-y-1.5 pt-1">
+                    <span className="text-[10px] font-bold text-slate-500 uppercase block">
+                      Atalhos Rápidos:
+                    </span>
+                    <div className="flex flex-wrap gap-1.5">
+                      {[
+                        { label: '15 min', h: 0, m: 15 },
+                        { label: '30 min', h: 0, m: 30 },
+                        { label: '45 min', h: 0, m: 45 },
+                        { label: '1 hora', h: 1, m: 0 },
+                        { label: '1h 30m', h: 1, m: 30 },
+                        { label: '2 horas', h: 2, m: 0 },
+                        { label: '3 horas', h: 3, m: 0 },
+                        { label: '4 horas', h: 4, m: 0 },
+                      ].map((chip) => {
+                        const isSelected = laborHours === chip.h && laborMinutes === chip.m;
+                        return (
+                          <button
+                            key={chip.label}
+                            type="button"
+                            onClick={() => handleSetQuickTime(chip.h, chip.m)}
+                            className={`px-2.5 py-1 rounded-lg text-[11px] font-semibold transition-all cursor-pointer ${
+                              isSelected
+                                ? 'bg-[#ac2471] text-white shadow-2xs'
+                                : 'bg-white text-slate-600 hover:bg-pink-100 hover:text-[#ac2471] border border-pink-100'
+                            }`}
+                          >
+                            {chip.label}
+                          </button>
+                        );
+                      })}
+                    </div>
+                  </div>
+                </div>
+
+                {/* Valor da Hora da Artesã (5 cols) */}
+                <div className="md:col-span-5 space-y-3 bg-[#faf7f8] p-4 sm:p-5 rounded-2xl border border-pink-100/80 flex flex-col justify-between">
+                  <div>
+                    <label className="block text-[11px] font-bold text-slate-700 uppercase mb-1 flex items-center gap-1.5">
+                      <Coins className="w-3.5 h-3.5 text-[#ac2471]" />
+                      <span>Valor da sua Hora (R$/h)</span>
+                    </label>
+                    <DecimalInput
+                      value={hourlyRate}
+                      onChangeValue={handleUpdateHourlyRate}
+                      prefix="R$"
+                      placeholder="20,00"
+                      className="w-full px-3.5 py-2.5 bg-white border border-[#f0e4e8] rounded-xl text-xs font-bold text-slate-800 focus:outline-hidden focus:border-[#ac2471]"
+                    />
+                    <p className="text-[10px] text-slate-400 mt-2 leading-relaxed">
+                      Quanto você cobra por hora trabalhada na confecção das peças.
+                    </p>
+                  </div>
+
+                  {/* Pre-sets de valor da hora */}
+                  <div className="pt-2 border-t border-pink-100/60">
+                    <span className="text-[10px] font-bold text-slate-400 uppercase block mb-1">
+                      Sugestões de Hora:
+                    </span>
+                    <div className="flex flex-wrap gap-1">
+                      {[15, 20, 25, 30].map((rateVal) => (
+                        <button
+                          key={rateVal}
+                          type="button"
+                          onClick={() => handleUpdateHourlyRate(rateVal)}
+                          className={`px-2 py-0.5 rounded-md text-[10px] font-bold transition-colors cursor-pointer ${
+                            hourlyRate === rateVal
+                              ? 'bg-pink-200 text-[#ac2471]'
+                              : 'bg-white text-slate-500 hover:bg-pink-100 hover:text-[#ac2471] border border-pink-100'
+                          }`}
+                        >
+                          R$ {rateVal},00/h
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              {/* Linha Inferior: Resumo Calculado da Mão de Obra + Custos Extras */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 pt-2">
+                {/* Resultado Automático da Mão de Obra */}
+                <div className="p-4 rounded-2xl bg-gradient-to-br from-pink-50/90 to-rose-50/50 border border-pink-200/80 space-y-2">
+                  <div className="flex items-center justify-between">
+                    <span className="text-[11px] font-bold text-[#ac2471] uppercase flex items-center gap-1.5">
+                      <Sparkles className="w-3.5 h-3.5" />
+                      VALOR DA MÃO DE OBRA
+                    </span>
+                    <span className="text-[10px] text-slate-500 font-semibold">
+                      {laborHours}h{laborMinutes > 0 ? ` ${laborMinutes}m` : ''} × {formatCurrency(hourlyRate)}/h
+                    </span>
+                  </div>
+
                   <DecimalInput
                     value={laborCost}
                     onChangeValue={(val) => setLaborCost(val)}
                     prefix="R$"
                     placeholder="0,00"
-                    className="w-full px-3 py-2 bg-[#f8f9fa] border border-[#f0e4e8] rounded-xl text-xs font-bold text-slate-800 focus:outline-hidden focus:border-[#ac2471]"
+                    className="w-full px-3.5 py-2.5 bg-white border border-pink-200 rounded-xl text-sm font-extrabold text-[#ac2471] focus:outline-hidden focus:border-[#ac2471] shadow-2xs"
                   />
-                  <p className="text-[10px] text-slate-400 mt-1">
-                    Valor fixo que você define pelo seu trabalho neste projeto.
-                  </p>
+
+                  <div className="flex items-center justify-between text-[10px] text-slate-500">
+                    <span>Calculado automaticamente pelo tempo</span>
+                    {laborCost !== calculatedLaborCost && (
+                      <button
+                        type="button"
+                        onClick={() => setLaborCost(calculatedLaborCost)}
+                        className="text-[#ac2471] hover:underline font-bold cursor-pointer"
+                        title="Restaurar valor exato do cálculo do tempo"
+                      >
+                        Restaurar ({formatCurrency(calculatedLaborCost)})
+                      </button>
+                    )}
+                  </div>
                 </div>
 
-                <div>
-                  <label className="block text-[11px] font-bold text-slate-500 uppercase mb-1">
-                    CUSTOS EXTRAS / ENERGIA (R$)
+                {/* Custos Extras / Energia */}
+                <div className="p-4 rounded-2xl bg-[#faf7f8] border border-pink-100 space-y-2">
+                  <label className="block text-[11px] font-bold text-slate-700 uppercase">
+                    🔌 Custos Extras / Desgaste / Energia (R$)
                   </label>
                   <DecimalInput
                     value={additionalCosts}
                     onChangeValue={(val) => setAdditionalCosts(val)}
                     prefix="R$"
                     placeholder="0,00"
-                    className="w-full px-3 py-2 bg-[#f8f9fa] border border-[#f0e4e8] rounded-xl text-xs font-bold text-slate-800 focus:outline-hidden focus:border-[#ac2471]"
+                    className="w-full px-3.5 py-2.5 bg-white border border-[#f0e4e8] rounded-xl text-xs font-bold text-slate-800 focus:outline-hidden focus:border-[#ac2471]"
                   />
-                  <p className="text-[10px] text-slate-400 mt-1">
-                    Desgaste de lâmina, cola quente, fita e energia.
+                  <p className="text-[10px] text-slate-400">
+                    Desgaste de lâmina de corte, cola quente, fita banana e energia elétrica.
                   </p>
                 </div>
               </div>
@@ -600,7 +819,7 @@ export const OrcamentoView: React.FC<OrcamentoViewProps> = ({
               {/* Profit margin slider */}
               <div className="space-y-2">
                 <div className="flex items-center justify-between text-xs font-semibold text-slate-700">
-                  <span>Margem de Lucro s/ Materiais</span>
+                  <span>Margem de Lucro s/ Custo Base Total</span>
                   <span className="text-[#ac2471] font-bold text-sm">{profitMargin}%</span>
                 </div>
                 <input
@@ -629,17 +848,22 @@ export const OrcamentoView: React.FC<OrcamentoViewProps> = ({
                   <span>Custos Extras / Desgaste:</span>
                   <span className="font-semibold">{formatCurrency(additionalCosts)}</span>
                 </div>
-                <div className="flex justify-between text-emerald-700 font-bold">
-                  <span>Lucro sobre Materiais ({profitMargin}%):</span>
-                  <span>+{formatCurrency(profitValue)}</span>
-                </div>
                 <div className="flex justify-between text-pink-700 font-bold pt-1 border-t border-pink-50">
-                  <span>Mão de Obra Fixa:</span>
+                  <div className="flex flex-col">
+                    <span>Mão de Obra da Artesã:</span>
+                    <span className="text-[10px] text-pink-500 font-normal">
+                      {laborHours}h{laborMinutes > 0 ? ` ${laborMinutes}m` : ''} @ {formatCurrency(hourlyRate)}/h
+                    </span>
+                  </div>
                   <span className="font-bold">{formatCurrency(laborCost)}</span>
                 </div>
-                <div className="flex justify-between text-slate-800 font-bold pt-1 border-t border-pink-50">
+                <div className="flex justify-between text-slate-800 font-bold pt-2 pb-2 px-2.5 my-1 border border-pink-100 bg-pink-50/60 rounded-xl">
                   <span>Custo Base Total:</span>
-                  <span>{formatCurrency(baseCost)}</span>
+                  <span className="text-[#ac2471] font-heading font-extrabold">{formatCurrency(baseCost)}</span>
+                </div>
+                <div className="flex justify-between text-emerald-700 font-bold pt-1">
+                  <span>Lucro s/ Custo Total ({profitMargin}%):</span>
+                  <span>+{formatCurrency(profitValue)}</span>
                 </div>
               </div>
 
@@ -808,8 +1032,15 @@ export const OrcamentoView: React.FC<OrcamentoViewProps> = ({
                           <span>{formatCurrency(quote.materials?.reduce((acc, m) => acc + m.unitCost * m.quantityUsed, 0) || 0)}</span>
                         </div>
                         <div className="flex justify-between font-medium">
-                          <span>Mão de Obra Fixa:</span>
-                          <span>{formatCurrency(quote.laborCost || 0)}</span>
+                          <span>Mão de Obra:</span>
+                          <span className="font-semibold text-slate-800">
+                            {formatCurrency(quote.laborCost || 0)}
+                            {((quote.laborHours || 0) > 0 || (quote.laborMinutes || 0) > 0) && (
+                              <span className="text-pink-600 font-normal ml-1 text-[10px]">
+                                ({quote.laborHours || 0}h{quote.laborMinutes ? ` ${quote.laborMinutes}m` : ''})
+                              </span>
+                            )}
+                          </span>
                         </div>
                         {quote.notes && (
                           <p className="text-[10px] text-slate-400 pt-1 border-t border-pink-100/60 truncate">

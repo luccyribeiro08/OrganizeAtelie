@@ -6,8 +6,7 @@ declare module 'https://deno.land/std@0.168.0/http/server.ts' {
 }
 
 declare module 'https://deno.land/*' {
-  export const serve: (handler: (req: Request) => Promise<Response> | Response) => void;
-  export const [key: string]: any;
+  export function serve(handler: (req: Request) => Promise<Response> | Response): void;
 }
 
 declare module 'https://esm.sh/@supabase/supabase-js@*' {
@@ -23,10 +22,7 @@ declare module 'https://esm.sh/@supabase/supabase-js@2.39.0' {
 }
 
 declare module 'https://esm.sh/*' {
-  const content: any;
-  export default content;
-  export const createClient: any;
-  export const [key: string]: any;
+  export * from '@supabase/supabase-js';
 }
 
 declare namespace Deno {

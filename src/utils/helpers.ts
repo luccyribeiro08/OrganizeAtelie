@@ -53,6 +53,25 @@ export function formatDate(dateString: string): string {
   return dateString;
 }
 
+export function getDeliveryDateTimestamp(deliveryDate?: string | null): number {
+  if (!deliveryDate) return Infinity;
+  try {
+    const clean = deliveryDate.split('T')[0];
+    const parts = clean.split('-');
+    if (parts.length === 3) {
+      const year = parseInt(parts[0], 10);
+      const month = parseInt(parts[1], 10);
+      const day = parseInt(parts[2], 10);
+      if (!isNaN(year) && !isNaN(month) && !isNaN(day)) {
+        return new Date(year, month - 1, day).getTime();
+      }
+    }
+    const d = new Date(deliveryDate);
+    if (!isNaN(d.getTime())) return d.getTime();
+  } catch {}
+  return Infinity;
+}
+
 export function getDaysRemaining(deliveryDate: string): { days: number; text: string; isUrgent: boolean } {
   if (!deliveryDate) return { days: 0, text: 'Sem data', isUrgent: false };
   const today = new Date();

@@ -1,6 +1,9 @@
 import React, { useState } from 'react';
 import {
   AlertCircle,
+  ArrowDown,
+  ArrowUp,
+  ArrowUpDown,
   BarChart3,
   Calendar,
   CalendarDays,
@@ -44,8 +47,17 @@ import {
   getAvailableMonths,
   getCurrentMonthKey,
   getDaysRemaining,
+  getDeliveryDateTimestamp,
   getOrderMonthKey
 } from '../utils/helpers';
+
+export type OrderSortOption =
+  | 'delivery-asc'
+  | 'delivery-desc'
+  | 'created-desc'
+  | 'created-asc'
+  | 'client-asc'
+  | 'total-desc';
 
 interface PedidosViewProps {
   orders: Order[];
@@ -78,6 +90,7 @@ export const PedidosView: React.FC<PedidosViewProps> = ({
   const [searchQuery, setSearchQuery] = useState('');
   const [statusFilter, setStatusFilter] = useState<string>('todos');
   const [originFilter, setOriginFilter] = useState<string>('todos');
+  const [sortBy, setSortBy] = useState<OrderSortOption>('delivery-asc');
   
   // Month selector for finalized orders & monthly revenue
   const [selectedMonth, setSelectedMonth] = useState<string>(() => getCurrentMonthKey());
@@ -101,33 +114,64 @@ export const PedidosView: React.FC<PedidosViewProps> = ({
   const currentMonthMetrics = calculateMonthlyMetrics(orders, selectedMonth);
   const selectedMonthName = formatMonthYear(selectedMonth);
 
-  // Filtered Orders for the views
-  const filteredOrders = orders.filter((order) => {
-    // Search query matching
-    const matchSearch =
-      order.clientName.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      order.code.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      order.theme.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      order.orderType.toLowerCase().includes(searchQuery.toLowerCase());
+  // Filtered & Sorted Orders for the views (Ordered by delivery days by default)
+  const filteredOrders = orders
+    .filter((order) => {
+      // Search query matching
+      const matchSearch =
+        order.clientName.toLowerCase().includes(searchQuery.toLowerCase()) ||
+        order.code.toLowerCase().includes(searchQuery.toLowerCase()) ||
+        order.theme.toLowerCase().includes(searchQuery.toLowerCase()) ||
+        order.orderType.toLowerCase().includes(searchQuery.toLowerCase());
 
-    if (!matchSearch) return false;
+      if (!matchSearch) return false;
 
-    // Origin matching
-    const matchOrigin = originFilter === 'todos' || order.origin === originFilter;
-    if (!matchOrigin) return false;
+      // Origin matching
+      const matchOrigin = originFilter === 'todos' || order.origin === originFilter;
+      if (!matchOrigin) return false;
 
-    // Status matching
-    const matchStatus = statusFilter === 'todos' || order.status === statusFilter;
-    if (!matchStatus) return false;
+      // Status matching
+      const matchStatus = statusFilter === 'todos' || order.status === statusFilter;
+      if (!matchStatus) return false;
 
-    // Month scoping: if order is Finalizado, it respects selectedMonth
-    if (order.status === 'Finalizado' && selectedMonth !== 'todos') {
-      const orderMonth = getOrderMonthKey(order);
-      if (orderMonth !== selectedMonth) return false;
-    }
+      // Month scoping: if order is Finalizado, it respects selectedMonth
+      if (order.status === 'Finalizado' && selectedMonth !== 'todos') {
+        const orderMonth = getOrderMonthKey(order);
+        if (orderMonth !== selectedMonth) return false;
+      }
 
-    return true;
-  });
+      return true;
+    })
+    .sort((a, b) => {
+      if (sortBy === 'delivery-asc') {
+        const timeA = getDeliveryDateTimestamp(a.deliveryDate);
+        const timeB = getDeliveryDateTimestamp(b.deliveryDate);
+        if (timeA !== timeB) return timeA - timeB;
+        return (new Date(b.createdAt || 0).getTime()) - (new Date(a.createdAt || 0).getTime());
+      }
+      if (sortBy === 'delivery-desc') {
+        const timeA = getDeliveryDateTimestamp(a.deliveryDate);
+        const timeB = getDeliveryDateTimestamp(b.deliveryDate);
+        if (timeA === Infinity && timeB === Infinity) return 0;
+        if (timeA === Infinity) return 1;
+        if (timeB === Infinity) return -1;
+        if (timeA !== timeB) return timeB - timeA;
+        return (new Date(b.createdAt || 0).getTime()) - (new Date(a.createdAt || 0).getTime());
+      }
+      if (sortBy === 'created-desc') {
+        return (new Date(b.createdAt || 0).getTime()) - (new Date(a.createdAt || 0).getTime());
+      }
+      if (sortBy === 'created-asc') {
+        return (new Date(a.createdAt || 0).getTime()) - (new Date(b.createdAt || 0).getTime());
+      }
+      if (sortBy === 'client-asc') {
+        return a.clientName.localeCompare(b.clientName, 'pt-BR');
+      }
+      if (sortBy === 'total-desc') {
+        return (b.financial?.total || 0) - (a.financial?.total || 0);
+      }
+      return 0;
+    });
 
   // Active workload stats
   const activeOrders = orders.filter((o) => o.status !== 'Finalizado' && o.status !== 'Rascunho');
@@ -307,9 +351,9 @@ export const PedidosView: React.FC<PedidosViewProps> = ({
       </div>
 
       {/* Filters Bar & Month Selector */}
-      <div className="bg-white p-4 rounded-3xl border border-pink-100 shadow-atelie flex flex-col md:flex-row gap-3 items-center justify-between">
+      <div className="bg-white p-4 rounded-3xl border border-pink-100 shadow-atelie flex flex-col lg:flex-row gap-3 items-center justify-between">
         {/* Search */}
-        <div className="relative w-full md:w-80">
+        <div className="relative w-full lg:w-72">
           <div className="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none text-slate-400">
             <Search className="w-4 h-4" />
           </div>
@@ -323,7 +367,25 @@ export const PedidosView: React.FC<PedidosViewProps> = ({
         </div>
 
         {/* Filter Dropdowns */}
-        <div className="flex flex-wrap items-center gap-2.5 w-full md:w-auto">
+        <div className="flex flex-wrap items-center gap-2.5 w-full lg:w-auto">
+          {/* Order / Sort Selector */}
+          <div className="flex items-center gap-1.5 bg-[#fdf2f6] border border-pink-200/90 rounded-2xl px-3 py-1.5 shadow-2xs">
+            <ArrowUpDown className="w-3.5 h-3.5 text-[#ac2471]" />
+            <span className="text-[11px] font-bold text-pink-700 uppercase">Ordem:</span>
+            <select
+              value={sortBy}
+              onChange={(e) => setSortBy(e.target.value as OrderSortOption)}
+              className="bg-transparent text-xs font-bold text-[#ac2471] focus:outline-hidden cursor-pointer"
+            >
+              <option value="delivery-asc">📅 Dias de Entrega (Mais Próximos)</option>
+              <option value="delivery-desc">📅 Dias de Entrega (Mais Distantes)</option>
+              <option value="created-desc">✨ Mais Recentes (Criação)</option>
+              <option value="created-asc">🕒 Mais Antigos (Criação)</option>
+              <option value="client-asc">👤 Nome do Cliente (A - Z)</option>
+              <option value="total-desc">💰 Valor Total (Maior primeiro)</option>
+            </select>
+          </div>
+
           {/* Month Selector for Finalized Orders / Revenue Control */}
           <div className="flex items-center gap-1.5 bg-[#fdf2f6] border border-pink-200 rounded-2xl px-3 py-1.5 shadow-2xs">
             <CalendarRange className="w-3.5 h-3.5 text-[#ac2471]" />
@@ -402,13 +464,44 @@ export const PedidosView: React.FC<PedidosViewProps> = ({
               <table className="w-full min-w-[960px] text-left text-xs text-slate-600">
                 <thead className="bg-[#faf7f8] border-b border-pink-100 text-[10px] font-bold text-slate-400 uppercase tracking-wider">
                   <tr>
-                    <th className="py-4 px-6">Código / Cliente</th>
+                    <th
+                      className="py-4 px-6 cursor-pointer select-none hover:text-[#ac2471] transition-colors"
+                      onClick={() => setSortBy(sortBy === 'client-asc' ? 'delivery-asc' : 'client-asc')}
+                      title="Ordenar por Nome do Cliente"
+                    >
+                      <div className="flex items-center gap-1.5">
+                        <span>Código / Cliente</span>
+                        {sortBy === 'client-asc' && <ArrowUp className="w-3 h-3 text-[#ac2471]" />}
+                      </div>
+                    </th>
                     <th className="py-4 px-4">Tema & Tipo</th>
                     <th className="py-4 px-4">Itens & Produtos</th>
                     <th className="py-4 px-4">Origem</th>
-                    <th className="py-4 px-4">Entrega</th>
+                    <th
+                      className="py-4 px-4 cursor-pointer select-none hover:text-[#ac2471] transition-colors"
+                      onClick={() => setSortBy(sortBy === 'delivery-asc' ? 'delivery-desc' : 'delivery-asc')}
+                      title="Alternar ordem de dias de entrega"
+                    >
+                      <div className="flex items-center gap-1.5 text-[#ac2471]">
+                        <span>Entrega</span>
+                        {sortBy === 'delivery-asc' && <ArrowUp className="w-3.5 h-3.5 text-[#ac2471]" />}
+                        {sortBy === 'delivery-desc' && <ArrowDown className="w-3.5 h-3.5 text-[#ac2471]" />}
+                        {sortBy !== 'delivery-asc' && sortBy !== 'delivery-desc' && (
+                          <ArrowUpDown className="w-3 h-3 text-slate-400" />
+                        )}
+                      </div>
+                    </th>
                     <th className="py-4 px-4">Status</th>
-                    <th className="py-4 px-4">Financeiro</th>
+                    <th
+                      className="py-4 px-4 cursor-pointer select-none hover:text-[#ac2471] transition-colors"
+                      onClick={() => setSortBy(sortBy === 'total-desc' ? 'delivery-asc' : 'total-desc')}
+                      title="Ordenar por Valor Total"
+                    >
+                      <div className="flex items-center gap-1.5">
+                        <span>Financeiro</span>
+                        {sortBy === 'total-desc' && <ArrowDown className="w-3 h-3 text-[#ac2471]" />}
+                      </div>
+                    </th>
                     <th className="py-4 px-6 text-right">Ações</th>
                   </tr>
                 </thead>

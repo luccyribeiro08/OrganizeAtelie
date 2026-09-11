@@ -1,3 +1,4 @@
+/// <reference path="../deno.d.ts" />
 // ============================================================
 // 🎀 ORGANIZE ATELIÊ - SUPABASE EDGE FUNCTION: WEBHOOK DE PAGAMENTO
 // Endpoint: POST /functions/v1/payment-webhook

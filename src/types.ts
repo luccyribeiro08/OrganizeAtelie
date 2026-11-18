@@ -205,5 +205,6 @@ export type ActiveTab =
   | 'agenda'
   | 'configuracoes'
   | 'admin-usuarios'
-  | 'assinatura';
+  | 'assinatura'
+  | 'mockups';
 

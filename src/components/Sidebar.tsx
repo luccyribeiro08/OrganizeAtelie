@@ -4,6 +4,7 @@ import {
   Calculator,
   Crown,
   FolderHeart,
+  Layers,
   LogOut,
   PlusCircle,
   Settings,
@@ -61,6 +62,13 @@ export const Sidebar: React.FC<SidebarProps> = ({
       label: 'Criar Pedido',
       icon: PlusCircle,
       highlight: true,
+    },
+    {
+      id: 'mockups' as ActiveTab,
+      label: 'Mockups',
+      icon: Layers,
+      badge: 'Novo',
+      badgeColor: 'bg-emerald-500 text-white',
     },
     {
       id: 'clientes' as ActiveTab,

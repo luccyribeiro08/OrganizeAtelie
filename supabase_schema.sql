@@ -471,3 +471,85 @@ SET is_admin = true,
     subscription_status = 'active',
     subscription_plan = 'vitalicio'
 WHERE LOWER(TRIM(email)) = 'sluccy45@gmail.com';
+
+-- ============================================================
+-- 16. Tabela de Modelos Personalizados de Mockup (user_mockup_models)
+-- ============================================================
+CREATE TABLE IF NOT EXISTS public.user_mockup_models (
+  id TEXT PRIMARY KEY,
+  user_id TEXT NOT NULL,
+  name TEXT NOT NULL,
+  category TEXT NOT NULL,
+  subcategory TEXT,
+  description TEXT,
+  front_image_url TEXT NOT NULL,
+  front_image_path TEXT,
+  side_image_url TEXT,
+  side_image_path TEXT,
+  thumbnail_url TEXT,
+  thumbnail_path TEXT,
+  has_side BOOLEAN DEFAULT TRUE,
+  faces_summary TEXT[] DEFAULT ARRAY['Frente', 'Lateral']::text[],
+  front_surface_config JSONB,
+  side_surface_config JSONB,
+  seam_config JSONB,
+  texture_config JSONB,
+  template JSONB NOT NULL,
+  status TEXT DEFAULT 'ready',
+  analysis_status TEXT DEFAULT 'ready',
+  confidence NUMERIC(4, 2) DEFAULT 0.90,
+  created_at TIMESTAMPTZ DEFAULT NOW(),
+  updated_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+-- Migração Idempotente de Colunas em user_mockup_models
+DO $$ 
+BEGIN 
+  IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_schema = 'public' AND table_name = 'user_mockup_models' AND column_name = 'front_image_path') THEN
+    ALTER TABLE public.user_mockup_models ADD COLUMN front_image_path TEXT;
+  END IF;
+
+  IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_schema = 'public' AND table_name = 'user_mockup_models' AND column_name = 'side_image_path') THEN
+    ALTER TABLE public.user_mockup_models ADD COLUMN side_image_path TEXT;
+  END IF;
+
+  IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_schema = 'public' AND table_name = 'user_mockup_models' AND column_name = 'thumbnail_path') THEN
+    ALTER TABLE public.user_mockup_models ADD COLUMN thumbnail_path TEXT;
+  END IF;
+
+  IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_schema = 'public' AND table_name = 'user_mockup_models' AND column_name = 'front_surface_config') THEN
+    ALTER TABLE public.user_mockup_models ADD COLUMN front_surface_config JSONB;
+  END IF;
+
+  IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_schema = 'public' AND table_name = 'user_mockup_models' AND column_name = 'side_surface_config') THEN
+    ALTER TABLE public.user_mockup_models ADD COLUMN side_surface_config JSONB;
+  END IF;
+
+  IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_schema = 'public' AND table_name = 'user_mockup_models' AND column_name = 'seam_config') THEN
+    ALTER TABLE public.user_mockup_models ADD COLUMN seam_config JSONB;
+  END IF;
+
+  IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_schema = 'public' AND table_name = 'user_mockup_models' AND column_name = 'texture_config') THEN
+    ALTER TABLE public.user_mockup_models ADD COLUMN texture_config JSONB;
+  END IF;
+
+  IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_schema = 'public' AND table_name = 'user_mockup_models' AND column_name = 'analysis_status') THEN
+    ALTER TABLE public.user_mockup_models ADD COLUMN analysis_status TEXT DEFAULT 'ready';
+  END IF;
+
+  IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_schema = 'public' AND table_name = 'user_mockup_models' AND column_name = 'confidence') THEN
+    ALTER TABLE public.user_mockup_models ADD COLUMN confidence NUMERIC(4, 2) DEFAULT 0.90;
+  END IF;
+END $$;
+
+CREATE INDEX IF NOT EXISTS idx_user_mockup_models_user_id ON public.user_mockup_models(user_id);
+
+ALTER TABLE public.user_mockup_models ENABLE ROW LEVEL SECURITY;
+
+DROP POLICY IF EXISTS "Usuário gerencia próprios modelos de mockup" ON public.user_mockup_models;
+CREATE POLICY "Usuário gerencia próprios modelos de mockup" ON public.user_mockup_models
+  FOR ALL
+  USING (true)
+  WITH CHECK (true);
+
+

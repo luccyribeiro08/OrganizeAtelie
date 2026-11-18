@@ -19,6 +19,7 @@ import { SubscriptionModal } from './components/SubscriptionModal';
 import { SubscriptionGuard } from './components/SubscriptionGuard';
 import { SubscriptionView } from './components/SubscriptionView';
 import { AdminUsersView } from './components/AdminUsersView';
+import { MockupsView } from './components/MockupsView';
 import { ActiveTab, AtelieProfile, CatalogItem, Client, Order, OrderStatus, Quotation, UserAccount } from './types';
 import {
   DEFAULT_CATALOG_CATEGORIES,
@@ -60,6 +61,7 @@ export default function App() {
           'configuracoes',
           'admin-usuarios',
           'assinatura',
+          'mockups',
         ].includes(savedTab)
       ) {
         return savedTab as ActiveTab;
@@ -1502,6 +1504,16 @@ export default function App() {
                 onNavigateToCatalog={() => setActiveTab('catalogo')}
                 onUpdateOrderTypes={handleUpdateOrderTypes}
               />
+            </SubscriptionGuard>
+          )}
+
+          {activeTab === 'mockups' && (
+            <SubscriptionGuard
+              profile={profile}
+              userId={currentUser?.id}
+              onNavigateToSubscription={() => setActiveTab('assinatura')}
+            >
+              <MockupsView userId={currentUser?.id} />
             </SubscriptionGuard>
           )}
 

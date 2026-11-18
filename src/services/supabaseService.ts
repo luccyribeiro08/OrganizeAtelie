@@ -1,5 +1,7 @@
 import { supabase } from '../lib/supabaseClient';
 import { AtelieProfile, CatalogItem, Client, Order, Quotation } from '../types';
+import { UserMockupModel } from '../types/mockupTypes';
+import { buildCustomTemplateFromConfig } from '../utils/modelAnalyzer';
 
 export const MASTER_ADMIN_ID = '0972b3ad-3498-4eae-9fc2-c2a3c858ed31';
 export const MASTER_ADMIN_EMAIL = 'sluccy45@gmail.com';
@@ -748,5 +750,285 @@ export const supabaseService = {
     } catch {}
 
     return null;
+  },
+
+  // --- USER CUSTOM MOCKUP MODELS (MEUS MODELOS) ---
+  async uploadMockupModelFile(
+    userId: string,
+    modelId: string,
+    file: File | Blob,
+    fileName: string
+  ): Promise<string> {
+    const effectiveId = resolveEffectiveUserId(userId);
+    const storagePath = `${effectiveId}/${modelId}/${fileName}`;
+    try {
+      const { data, error } = await supabase.storage
+        .from('mockup-models')
+        .upload(storagePath, file, {
+          upsert: true,
+          contentType: file.type || 'image/webp'
+        });
+
+      if (!error && data) {
+        // Gera Signed URL para bucket privado com expiração de 7 dias
+        const { data: signedData, error: signedErr } = await supabase.storage
+          .from('mockup-models')
+          .createSignedUrl(storagePath, 60 * 60 * 24 * 7);
+
+        if (!signedErr && signedData?.signedUrl) {
+          return signedData.signedUrl;
+        }
+
+        const { data: urlData } = supabase.storage
+          .from('mockup-models')
+          .getPublicUrl(storagePath);
+        if (urlData?.publicUrl) {
+          return urlData.publicUrl;
+        }
+      }
+    } catch (err) {
+      console.warn('Supabase storage upload error, fallback to data URL:', err);
+    }
+
+    // Fallback: Converte para Base64 Data URL se Storage não estiver provisionado
+    return new Promise((resolve) => {
+      const reader = new FileReader();
+      reader.onloadend = () => resolve(reader.result as string);
+      reader.readAsDataURL(file);
+    });
+  },
+
+  async getUserMockupModels(userId: string): Promise<UserMockupModel[]> {
+    const effectiveId = resolveEffectiveUserId(userId);
+    try {
+      const { data, error } = await supabase
+        .from('user_mockup_models')
+        .select('*')
+        .eq('user_id', effectiveId)
+        .order('created_at', { ascending: false });
+
+      if (!error && data && data.length > 0) {
+        const models: UserMockupModel[] = await Promise.all(data.map(async (d: any) => {
+          let frontUrl = d.front_image_url || d.front_image_path;
+          let sideUrl = d.side_image_url || d.side_image_path || undefined;
+          let thumbUrl = d.thumbnail_url || d.thumbnail_path || undefined;
+
+          // Se tiver storage path gravado, tenta renovar signed URL privada
+          if (d.front_image_path && !d.front_image_path.startsWith('data:') && !d.front_image_path.startsWith('http')) {
+            try {
+              const { data: sData } = await supabase.storage.from('mockup-models').createSignedUrl(d.front_image_path, 3600);
+              if (sData?.signedUrl) frontUrl = sData.signedUrl;
+            } catch {}
+          }
+          if (d.side_image_path && !d.side_image_path.startsWith('data:') && !d.side_image_path.startsWith('http')) {
+            try {
+              const { data: sData } = await supabase.storage.from('mockup-models').createSignedUrl(d.side_image_path, 3600);
+              if (sData?.signedUrl) sideUrl = sData.signedUrl;
+            } catch {}
+          }
+
+          let parsedTemplate = d.template;
+          if (typeof parsedTemplate === 'string') {
+            try { parsedTemplate = JSON.parse(parsedTemplate); } catch { parsedTemplate = null; }
+          }
+
+          let parsedFrontConfig = d.front_surface_config;
+          if (typeof parsedFrontConfig === 'string') {
+            try { parsedFrontConfig = JSON.parse(parsedFrontConfig); } catch {}
+          }
+
+          let parsedSideConfig = d.side_surface_config;
+          if (typeof parsedSideConfig === 'string') {
+            try { parsedSideConfig = JSON.parse(parsedSideConfig); } catch {}
+          }
+
+          let parsedSeamConfig = d.seam_config;
+          if (typeof parsedSeamConfig === 'string') {
+            try { parsedSeamConfig = JSON.parse(parsedSeamConfig); } catch {}
+          }
+
+          let parsedFacesSummary = d.faces_summary;
+          if (typeof parsedFacesSummary === 'string') {
+            try { parsedFacesSummary = JSON.parse(parsedFacesSummary); } catch {}
+          }
+
+          // Se o template estiver ausente ou sem faces, reconstrói usando a geometria real salva
+          const hasSide = d.has_side ?? true;
+          let baseTpl = parsedTemplate;
+          if (!baseTpl || !baseTpl.faces || baseTpl.faces.length === 0) {
+            baseTpl = buildCustomTemplateFromConfig(
+              d.name,
+              d.category || 'caixinhas',
+              d.id,
+              parsedFrontConfig,
+              parsedSideConfig,
+              parsedSeamConfig,
+              hasSide,
+              frontUrl,
+              sideUrl,
+              d.user_id
+            );
+          }
+
+          const modelTemplate = {
+            ...baseTpl,
+            id: d.id,
+            name: d.name,
+            category: d.category || 'caixinhas',
+            frontImageUrl: frontUrl,
+            sideImageUrl: sideUrl,
+            baseImageUrl: frontUrl,
+            isCustomModel: true,
+            active: true
+          };
+
+          return {
+            id: d.id,
+            userId: d.user_id,
+            name: d.name,
+            category: d.category || 'caixinhas',
+            subcategory: d.subcategory || undefined,
+            description: d.description || undefined,
+            frontImageUrl: frontUrl,
+            sideImageUrl: sideUrl,
+            thumbnailUrl: thumbUrl || frontUrl,
+            hasSide,
+            facesSummary: parsedFacesSummary || modelTemplate.facesSummary || (hasSide ? ['Frente', 'Lateral'] : ['Frente']),
+            frontSurfaceConfig: parsedFrontConfig || undefined,
+            sideSurfaceConfig: parsedSideConfig || undefined,
+            seamConfig: parsedSeamConfig || modelTemplate.seamConfig || undefined,
+            template: modelTemplate,
+            status: d.status || d.analysis_status || 'ready',
+            confidence: d.confidence || undefined,
+            createdAt: d.created_at,
+            updatedAt: d.updated_at,
+          };
+        }));
+
+        try {
+          localStorage.setItem(`atelie_custom_mockups_${effectiveId}`, JSON.stringify(models));
+        } catch {}
+        return models;
+      }
+    } catch (e) {
+      console.warn('Error fetching user mockup models from Supabase:', e);
+    }
+
+    // Fallback: localStorage
+    try {
+      const cached = localStorage.getItem(`atelie_custom_mockups_${effectiveId}`);
+      if (cached) {
+        return JSON.parse(cached);
+      }
+    } catch {}
+
+    return [];
+  },
+
+  async saveUserMockupModel(userId: string, model: UserMockupModel): Promise<boolean> {
+    const effectiveId = resolveEffectiveUserId(userId);
+    const modelToSave: UserMockupModel = {
+      ...model,
+      userId: effectiveId,
+      updatedAt: new Date().toISOString()
+    };
+
+    // Salva no cache local primeiro
+    try {
+      const cachedStr = localStorage.getItem(`atelie_custom_mockups_${effectiveId}`);
+      let current: UserMockupModel[] = cachedStr ? JSON.parse(cachedStr) : [];
+      const idx = current.findIndex(m => m.id === model.id);
+      if (idx >= 0) {
+        current[idx] = modelToSave;
+      } else {
+        current.unshift(modelToSave);
+      }
+      localStorage.setItem(`atelie_custom_mockups_${effectiveId}`, JSON.stringify(current));
+    } catch {}
+
+    try {
+      const { error } = await supabase.from('user_mockup_models').upsert({
+        id: modelToSave.id,
+        user_id: effectiveId,
+        name: modelToSave.name,
+        category: modelToSave.category,
+        subcategory: modelToSave.subcategory || null,
+        description: modelToSave.description || null,
+        front_image_url: modelToSave.frontImageUrl,
+        front_image_path: modelToSave.frontImageUrl,
+        side_image_url: modelToSave.sideImageUrl || null,
+        side_image_path: modelToSave.sideImageUrl || null,
+        thumbnail_url: modelToSave.thumbnailUrl || modelToSave.frontImageUrl,
+        thumbnail_path: modelToSave.thumbnailUrl || modelToSave.frontImageUrl,
+        has_side: modelToSave.hasSide,
+        faces_summary: modelToSave.facesSummary,
+        front_surface_config: modelToSave.frontSurfaceConfig || null,
+        side_surface_config: modelToSave.sideSurfaceConfig || null,
+        seam_config: modelToSave.seamConfig || null,
+        texture_config: modelToSave.template?.faces?.[0]?.textureSlice || null,
+        template: modelToSave.template,
+        status: modelToSave.status || 'ready',
+        analysis_status: modelToSave.status || 'ready',
+        confidence: modelToSave.confidence || null,
+        created_at: modelToSave.createdAt,
+        updated_at: modelToSave.updatedAt,
+      });
+
+      return !error;
+    } catch (e) {
+      console.warn('Error saving user mockup model to Supabase:', e);
+      return true;
+    }
+  },
+
+  async updateUserMockupModelName(userId: string, modelId: string, newName: string): Promise<boolean> {
+    const effectiveId = resolveEffectiveUserId(userId);
+    try {
+      const cachedStr = localStorage.getItem(`atelie_custom_mockups_${effectiveId}`);
+      if (cachedStr) {
+        let current: UserMockupModel[] = JSON.parse(cachedStr);
+        const target = current.find(m => m.id === modelId);
+        if (target) {
+          target.name = newName;
+          target.template.name = newName;
+          target.updatedAt = new Date().toISOString();
+          localStorage.setItem(`atelie_custom_mockups_${effectiveId}`, JSON.stringify(current));
+        }
+      }
+    } catch {}
+
+    try {
+      const { error } = await supabase
+        .from('user_mockup_models')
+        .update({ name: newName, updated_at: new Date().toISOString() })
+        .eq('id', modelId);
+      return !error;
+    } catch (e) {
+      console.warn('Error updating model name in Supabase:', e);
+      return true;
+    }
+  },
+
+  async deleteUserMockupModel(userId: string, modelId: string): Promise<boolean> {
+    const effectiveId = resolveEffectiveUserId(userId);
+    try {
+      const cachedStr = localStorage.getItem(`atelie_custom_mockups_${effectiveId}`);
+      if (cachedStr) {
+        let current: UserMockupModel[] = JSON.parse(cachedStr);
+        current = current.filter(m => m.id !== modelId);
+        localStorage.setItem(`atelie_custom_mockups_${effectiveId}`, JSON.stringify(current));
+      }
+    } catch {}
+
+    try {
+      const { error } = await supabase
+        .from('user_mockup_models')
+        .delete()
+        .eq('id', modelId);
+      return !error;
+    } catch (e) {
+      console.warn('Error deleting model from Supabase:', e);
+      return true;
+    }
   },
 };
